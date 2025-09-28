@@ -1,0 +1,11 @@
+:root {
+  --brand-gold: #F6C90E;
+  --brand-blue: #0F52BA;
+  font-family: Inter, Roboto, Segoe UI, Arial, sans-serif;
+}
+.bg-brand-blue { background: var(--brand-blue); }
+.text-brand-blue { color: var(--brand-blue); }
+.bg-brand-gold { background: var(--brand-gold); }
+.text-brand-gold { color: var(--brand-gold); }
+.border-brand-blue { border-color: var(--brand-blue); }
+.border-brand-gold { border-color: var(--brand-gold); }

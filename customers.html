@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Khách hàng – KLC Bến Lức</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.2/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/brand.css">
+  <script src="js/core/ui.js"></script>
+  <script src="js/core/utils.js"></script>
+  <script src="js/core/storage.js"></script>
+  <script src="js/core/auth.js"></script>
+  <script src="js/modules/customers.js"></script>
+</head>
+<body class="bg-gray-50">
+  <header class="flex items-center justify-between bg-brand-blue px-4 py-2 text-white">
+    <div class="flex items-center space-x-3">
+      <img src="assets/img/logo.png" class="h-8" alt="KLC Logo">
+      <span class="font-bold text-lg">KLC Bến Lức</span>
+    </div>
+    <div>
+      <span id="userDisplay"></span>
+      <button onclick="logout()" class="ml-4 bg-brand-gold px-3 py-1 rounded text-brand-blue">Đăng xuất</button>
+    </div>
+  </header>
+  <main class="max-w-4xl mx-auto p-4">
+    <h2 class="text-2xl font-bold text-brand-blue mt-4 mb-8">Khách hàng</h2>
+    <form id="customerForm" class="bg-white p-4 rounded shadow mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><label>Ngày: <input type="date" name="date" required class="w-full border rounded px-2 py-1"></label></div>
+        <div><label>Tên: <input type="text" name="name" required class="w-full border rounded px-2 py-1"></label></div>
+        <div><label>SĐT: <input type="text" name="phone" required class="w-full border rounded px-2 py-1"></label></div>
+        <div><label>Địa chỉ: <input type="text" name="address" class="w-full border rounded px-2 py-1"></label></div>
+        <div>
+          <label>Nguồn khách:
+            <select name="sourceType" class="w-full border rounded px-2 py-1">
+              <option value="offline">Khách ghé ngang</option>
+              <option value="online">Khách online</option>
+              <option value="refer">Khách cũ giới thiệu</option>
+              <option value="repeat">Khách cũ mua lại</option>
+              <option value="staff">Người quen nhân viên</option>
+              <option value="other">Khác</option>
+            </select>
+          </label>
+          <input type="text" name="sourceDetail" class="w-full border rounded px-2 py-1 mt-2 hidden" placeholder="Chi tiết nguồn">
+        </div>
+        <div>
+          <label>Tình trạng mua hàng: 
+            <select name="purchased" class="w-full border rounded px-2 py-1">
+              <option value="false">Chưa mua</option>
+              <option value="true">Đã mua</option>
+            </select>
+          </label>
+          <div id="purchasedFields" class="mt-2 hidden">
+            <input type="text" name="model" class="w-full border rounded px-2 py-1 mb-2" placeholder="Mẫu ghế">
+            <input type="number" name="price" class="w-full border rounded px-2 py-1" placeholder="Giá tiền">
+          </div>
+          <div id="consultFields" class="mt-2 hidden">
+            <div id="consultList"></div>
+            <button type="button" id="addConsultBtn" class="bg-brand-gold text-brand-blue px-2 py-1 rounded mt-2">Thêm mẫu đã tư vấn</button>
+          </div>
+        </div>
+        <div class="md:col-span-
