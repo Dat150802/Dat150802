@@ -6,32 +6,137 @@
   <title>KLC – CSKH</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/brand.css">
-  
   <style>
     .nav-item{ display:block; padding:.6rem .8rem; border-radius:.75rem; color:#e5e7eb; }
     .nav-item:hover{ background:rgba(255,255,255,.08); }
-    .mn{ display:flex; align-items:center; justify-content:center; height:42px; border-radius:.75rem; background:#111827; color:#e5e7eb; }
   </style>
 </head>
 <body class="bg-gray-50">
 <div id="app-loading"></div>
-<div id="toast-stack"></div>
+<div id="toast-stack" class="fixed top-6 right-6 space-y-3 z-50"></div>
 
 <header id="app-header" class="bg-brand-blue text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40"></header>
 <div class="flex">
-  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white"></aside>
-  <main class="flex-1 p-4">
-    <h1 class="text-2xl font-bold mb-4 text-brand-blue">CSKH</h1>
-
-<div class="p-4 rounded-2xl bg-white shadow border">
-  <p class="text-gray-600">Trang đang trong <b>Stage 2</b>. Khung giao diện đã sẵn sàng để tích hợp form và danh sách.</p>
-</div>
-<script type="module">
-  import '../js/modules/care.js';
-</script>
-
+  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white p-4 space-y-2"></aside>
+  <main class="flex-1 p-4 pb-24 space-y-6">
+    <div class="flex flex-col lg:flex-row gap-6">
+      <section class="flex-1 space-y-6">
+        <div>
+          <h1 class="text-2xl font-bold mb-2 text-brand-blue">Chăm sóc khách hàng</h1>
+          <p class="text-sm text-gray-500">Theo dõi toàn bộ lịch sử tương tác để nắm rõ tình trạng khách hàng.</p>
+        </div>
+        <div class="card p-5">
+          <form id="care-form" onsubmit="return false" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input type="hidden" id="care-customer-id">
+            <label class="block">
+              <span class="text-sm font-medium">Ngày</span>
+              <input id="care-date" type="date" class="mt-1 px-3 py-2 border rounded w-full">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Tên khách hàng</span>
+              <input id="care-name" list="customer-names" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Tên khách">
+              <datalist id="customer-names"></datalist>
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Số điện thoại</span>
+              <input id="care-phone" list="customer-phones" class="mt-1 px-3 py-2 border rounded w-full" placeholder="0xxxxxxxxx">
+              <datalist id="customer-phones"></datalist>
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Địa chỉ</span>
+              <input id="care-address" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Địa chỉ">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Nhân viên phụ trách</span>
+              <select id="care-staff" class="mt-1 px-3 py-2 border rounded w-full"></select>
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Hình thức CSKH</span>
+              <select id="care-method" class="mt-1 px-3 py-2 border rounded w-full">
+                <option>Gọi điện</option>
+                <option>Nhắn tin</option>
+                <option>Gửi tin nhắn hàng loạt</option>
+                <option>Gọi điện + nhắn tin</option>
+              </select>
+            </label>
+            <label class="block col-span-2">
+              <span class="text-sm font-medium">Nội dung CSKH</span>
+              <textarea id="care-content" class="mt-1 px-3 py-2 border rounded w-full" rows="3"></textarea>
+            </label>
+            <label class="block col-span-2">
+              <span class="text-sm font-medium">Phản hồi khách hàng</span>
+              <textarea id="care-feedback" class="mt-1 px-3 py-2 border rounded w-full" rows="2"></textarea>
+            </label>
+            <label class="block col-span-2">
+              <span class="text-sm font-medium">Ghi chú nội bộ</span>
+              <textarea id="care-note" class="mt-1 px-3 py-2 border rounded w-full" rows="2"></textarea>
+            </label>
+            <div id="care-rating-wrap" class="col-span-2 space-y-2">
+              <span class="text-sm font-medium">Đánh giá khách hàng</span>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                <label class="inline-flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border">
+                  <input type="radio" name="care-rating" value="potential"> Khách còn tiềm năng
+                </label>
+                <label class="inline-flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border">
+                  <input type="radio" name="care-rating" value="nurturing"> Đang nuôi khách
+                </label>
+                <label class="inline-flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border">
+                  <input type="radio" name="care-rating" value="appointment"> Đang hẹn lên
+                </label>
+                <label class="inline-flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border">
+                  <input type="radio" name="care-rating" value="lost"> Hết tiềm năng
+                </label>
+              </div>
+              <div id="care-reason-wrap" class="hidden">
+                <span class="text-sm font-medium">Lý do hết tiềm năng</span>
+                <textarea id="care-reason" class="mt-1 px-3 py-2 border rounded w-full" rows="2" placeholder="Ghi rõ lý do"></textarea>
+              </div>
+            </div>
+            <div class="col-span-2 flex gap-3">
+              <button id="btn-care-save" type="button" class="px-4 py-2 rounded-xl bg-brand-gold text-black font-semibold">Lưu</button>
+              <button id="btn-care-reset" type="button" class="px-4 py-2 rounded-xl bg-gray-100">Xoá form</button>
+            </div>
+          </form>
+        </div>
+        <hr class="border-dashed">
+        <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+          <input id="care-search" class="px-3 py-2 border rounded w-full md:w-80" placeholder="Tìm kiếm khách hàng / nội dung">
+          <div class="flex gap-2">
+            <select id="filter-rating" class="px-3 py-2 border rounded">
+              <option value="all">Mọi đánh giá</option>
+              <option value="potential">Khách còn tiềm năng</option>
+              <option value="nurturing">Đang nuôi khách</option>
+              <option value="appointment">Đang hẹn lên</option>
+              <option value="lost">Hết tiềm năng</option>
+            </select>
+            <select id="filter-staff" class="px-3 py-2 border rounded">
+              <option value="all">Mọi nhân viên</option>
+            </select>
+          </div>
+        </div>
+        <div id="care-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      </section>
+      <aside class="w-full lg:w-72 space-y-4">
+        <div class="card p-4" data-announcements>
+          <div class="text-sm text-gray-500">Thông báo nội bộ</div>
+          <p class="text-xs text-gray-400">Chưa có thông báo.</p>
+        </div>
+        <div class="card p-4 space-y-3 text-sm text-gray-600">
+          <h2 class="text-sm font-semibold text-brand-blue">Mẹo chăm sóc khách hàng</h2>
+          <ul class="list-disc pl-4 space-y-1">
+            <li>Nhập đầy đủ phản hồi của khách để dễ theo dõi.</li>
+            <li>Đánh dấu trạng thái khách để đội ngũ dễ phân loại.</li>
+            <li>Khi khách hết tiềm năng, mô tả rõ lý do để tối ưu quy trình.</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
   </main>
 </div>
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a]"></nav>
+<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a] flex gap-2"></nav>
+
+<script type="module">
+  import './js/modules/care.js';
+</script>
 </body>
 </html>

@@ -6,32 +6,128 @@
   <title>KLC – Tồn kho</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/brand.css">
-  
   <style>
     .nav-item{ display:block; padding:.6rem .8rem; border-radius:.75rem; color:#e5e7eb; }
     .nav-item:hover{ background:rgba(255,255,255,.08); }
-    .mn{ display:flex; align-items:center; justify-content:center; height:42px; border-radius:.75rem; background:#111827; color:#e5e7eb; }
   </style>
 </head>
 <body class="bg-gray-50">
 <div id="app-loading"></div>
-<div id="toast-stack"></div>
+<div id="toast-stack" class="fixed top-6 right-6 space-y-3 z-50"></div>
 
 <header id="app-header" class="bg-brand-blue text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40"></header>
 <div class="flex">
-  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white"></aside>
-  <main class="flex-1 p-4">
-    <h1 class="text-2xl font-bold mb-4 text-brand-blue">Tồn kho</h1>
-
-<div class="p-4 rounded-2xl bg-white shadow border">
-  <p class="text-gray-600">Trang đang trong <b>Stage 2</b>. Khung giao diện đã sẵn sàng để tích hợp form và danh sách.</p>
-</div>
-<script type="module">
-  import '../js/modules/inventory.js';
-</script>
-
+  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white p-4 space-y-2"></aside>
+  <main class="flex-1 p-4 pb-24 space-y-6">
+    <div class="flex flex-col lg:flex-row gap-6">
+      <section class="flex-1 space-y-6">
+        <div>
+          <h1 class="text-2xl font-bold mb-2 text-brand-blue">Quản lý tồn kho</h1>
+          <p class="text-sm text-gray-500">Theo dõi nhập – xuất mỗi ngày và cập nhật lượng tồn theo từng sản phẩm.</p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="inventory-summary"></div>
+        <div class="card p-5 space-y-4">
+          <div class="flex gap-3 text-sm">
+            <label class="flex items-center gap-2 px-3 py-2 rounded-xl border bg-gray-50">
+              <input type="radio" name="inv-type" value="in" checked> Nhập kho
+            </label>
+            <label class="flex items-center gap-2 px-3 py-2 rounded-xl border bg-gray-50">
+              <input type="radio" name="inv-type" value="out"> Xuất kho
+            </label>
+          </div>
+          <form id="inventory-form" onsubmit="return false" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block">
+              <span class="text-sm font-medium">Ngày</span>
+              <input id="inv-date" type="date" class="mt-1 px-3 py-2 border rounded w-full">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Sản phẩm</span>
+              <input id="inv-product" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Tên sản phẩm">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Mã hàng (SKU)</span>
+              <input id="inv-sku" class="mt-1 px-3 py-2 border rounded w-full" placeholder="SKU">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Danh mục</span>
+              <input id="inv-category" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Ghế massage, Phụ kiện…">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Số lượng</span>
+              <input id="inv-qty" type="number" class="mt-1 px-3 py-2 border rounded w-full" placeholder="0">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Đơn vị</span>
+              <input id="inv-unit" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Cái, bộ…">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Đơn giá (VNĐ)</span>
+              <input id="inv-unit-price" type="number" class="mt-1 px-3 py-2 border rounded w-full" placeholder="0">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Đối tác (nhập từ / giao cho)</span>
+              <input id="inv-partner" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Nhà cung cấp hoặc khách nhận">
+            </label>
+            <label class="block md:col-span-2">
+              <span class="text-sm font-medium">Ghi chú</span>
+              <textarea id="inv-note" class="mt-1 px-3 py-2 border rounded w-full" rows="2"></textarea>
+            </label>
+            <div class="col-span-2 flex gap-3">
+              <button id="btn-inv-save" type="button" class="px-4 py-2 rounded-xl bg-brand-gold text-black font-semibold">Lưu phiếu</button>
+              <button id="btn-inv-reset" type="button" class="px-4 py-2 rounded-xl bg-gray-100">Xoá form</button>
+            </div>
+          </form>
+        </div>
+        <hr class="border-dashed">
+        <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+          <input id="inv-search" class="px-3 py-2 border rounded w-full md:w-80" placeholder="Tìm sản phẩm / ghi chú / đối tác">
+          <div class="flex gap-2">
+            <select id="inv-filter-type" class="px-3 py-2 border rounded">
+              <option value="all">Tất cả</option>
+              <option value="in">Nhập kho</option>
+              <option value="out">Xuất kho</option>
+            </select>
+            <select id="inv-filter-category" class="px-3 py-2 border rounded">
+              <option value="all">Mọi danh mục</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-responsive bg-white shadow-sm border">
+          <table class="min-w-full text-sm" id="inv-movements">
+            <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr>
+                <th class="px-3 py-2 text-left">Ngày</th>
+                <th class="px-3 py-2 text-left">Sản phẩm</th>
+                <th class="px-3 py-2 text-left">Loại</th>
+                <th class="px-3 py-2 text-left">SL</th>
+                <th class="px-3 py-2 text-left">Đơn vị</th>
+                <th class="px-3 py-2 text-left">Đơn giá</th>
+                <th class="px-3 py-2 text-left">Thành tiền</th>
+                <th class="px-3 py-2 text-left">Đối tác</th>
+                <th class="px-3 py-2 text-left">Ghi chú</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+      <aside class="w-full lg:w-72 space-y-4">
+        <div class="card p-4" data-announcements>
+          <div class="text-sm text-gray-500">Thông báo nội bộ</div>
+          <p class="text-xs text-gray-400">Chưa có thông báo.</p>
+        </div>
+        <div class="card p-4 space-y-3 text-sm text-gray-600">
+          <h2 class="text-sm font-semibold text-brand-blue">Danh sách tồn hiện tại</h2>
+          <div id="inv-stock" class="space-y-2 text-xs"></div>
+        </div>
+      </aside>
+    </div>
   </main>
 </div>
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a]"></nav>
+<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a] flex gap-2"></nav>
+
+<script type="module">
+  import './js/modules/inventory.js';
+</script>
 </body>
 </html>

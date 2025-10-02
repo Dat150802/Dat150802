@@ -6,119 +6,128 @@
   <title>KLC – Khách hàng</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/brand.css">
-  
   <style>
     .nav-item{ display:block; padding:.6rem .8rem; border-radius:.75rem; color:#e5e7eb; }
     .nav-item:hover{ background:rgba(255,255,255,.08); }
-    .mn{ display:flex; align-items:center; justify-content:center; height:42px; border-radius:.75rem; background:#111827; color:#e5e7eb; }
   </style>
 </head>
 <body class="bg-gray-50">
 <div id="app-loading"></div>
-<div id="toast-stack"></div>
+<div id="toast-stack" class="fixed top-6 right-6 space-y-3 z-50"></div>
 
 <header id="app-header" class="bg-brand-blue text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40"></header>
 <div class="flex">
-  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white"></aside>
-  <main class="flex-1 p-4">
-    <h1 class="text-2xl font-bold mb-4 text-brand-blue">Khách hàng – Form & Danh sách</h1>
-
-<!-- Form -->
-<div class="p-4 rounded-2xl bg-white shadow border">
-  <form id="customer-form" onsubmit="return false" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <label class="block">
-      <span class="text-sm font-medium">Ngày</span>
-      <input id="f-date" type="date" class="mt-1 px-3 py-2 border rounded w-full">
-    </label>
-    <label class="block">
-      <span class="text-sm font-medium">Tên</span>
-      <input id="f-name" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Tên khách">
-    </label>
-    <label class="block">
-      <span class="text-sm font-medium">Số điện thoại</span>
-      <input id="f-phone" class="mt-1 px-3 py-2 border rounded w-full" placeholder="0xxxxxxxxx">
-    </label>
-    <label class="block">
-      <span class="text-sm font-medium">Địa chỉ</span>
-      <input id="f-address" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Địa chỉ">
-    </label>
-    <label class="block">
-      <span class="text-sm font-medium">Nguồn khách</span>
-      <select id="f-source" class="mt-1 px-3 py-2 border rounded w-full">
-        <option>Khách ghé ngang</option>
-        <option>Khách online</option>
-        <option>Khách cũ giới thiệu</option>
-        <option>Khách cũ mua lại</option>
-        <option>Người quen nhân viên</option>
-        <option>Khác</option>
-      </select>
-    </label>
-    <div id="f-source-detail-wrap" class="block hidden">
-      <span class="text-sm font-medium">Chi tiết nguồn</span>
-      <input id="f-source-detail" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Chi tiết">
+  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white p-4 space-y-2"></aside>
+  <main class="flex-1 p-4 pb-24 space-y-6">
+    <div class="flex flex-col lg:flex-row gap-6">
+      <section class="flex-1 space-y-6">
+        <div>
+          <h1 class="text-2xl font-bold mb-2 text-brand-blue">Khách hàng – Form &amp; Danh sách</h1>
+          <p class="text-sm text-gray-500">Ghi nhận đầy đủ thông tin khách hàng để theo dõi hành trình mua hàng.</p>
+        </div>
+        <div class="card p-5">
+          <form id="customer-form" onsubmit="return false" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block">
+              <span class="text-sm font-medium">Ngày</span>
+              <input id="f-date" type="date" class="mt-1 px-3 py-2 border rounded w-full">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Tên</span>
+              <input id="f-name" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Tên khách">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Số điện thoại</span>
+              <input id="f-phone" class="mt-1 px-3 py-2 border rounded w-full" placeholder="0xxxxxxxxx">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Địa chỉ</span>
+              <input id="f-address" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Địa chỉ">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Nguồn khách</span>
+              <select id="f-source" class="mt-1 px-3 py-2 border rounded w-full">
+                <option>Khách ghé ngang</option>
+                <option>Khách online</option>
+                <option>Khách cũ giới thiệu</option>
+                <option>Khách cũ mua lại</option>
+                <option>Người quen nhân viên</option>
+                <option>Khác</option>
+              </select>
+            </label>
+            <div id="f-source-detail-wrap" class="block hidden">
+              <span class="text-sm font-medium">Chi tiết nguồn</span>
+              <input id="f-source-detail" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Chi tiết">
+            </div>
+            <label class="block">
+              <span class="text-sm font-medium">Tình trạng</span>
+              <label class="inline-flex items-center gap-2 ml-2 text-sm">
+                <input id="f-purchased" type="checkbox"> Đã mua
+              </label>
+            </label>
+            <div id="f-model-wrap" class="block hidden">
+              <span class="text-sm font-medium">Mẫu ghế &amp; Giá</span>
+              <div class="grid grid-cols-2 gap-2">
+                <input id="f-model" class="px-3 py-2 border rounded" placeholder="VD: KY02">
+                <input id="f-price" type="number" class="px-3 py-2 border rounded" placeholder="Giá (VNĐ)">
+              </div>
+            </div>
+            <div id="f-consults-wrap" class="block col-span-2">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium">Đã tư vấn (có thể nhiều dòng)</span>
+                <button id="add-consult" type="button" class="px-3 py-1.5 rounded bg-brand-blue text-white text-sm">+ Thêm dòng</button>
+              </div>
+              <div id="consults-list" class="mt-2 space-y-3"></div>
+            </div>
+            <label class="block col-span-2">
+              <span class="text-sm font-medium">Ghi chú</span>
+              <textarea id="f-note" class="mt-1 px-3 py-2 border rounded w-full" rows="2"></textarea>
+            </label>
+            <div class="col-span-2 flex gap-3">
+              <button id="btn-save" type="button" class="px-4 py-2 rounded-xl bg-brand-gold text-black font-semibold">Lưu</button>
+              <button id="btn-reset" type="button" class="px-4 py-2 rounded-xl bg-gray-100">Xoá form</button>
+            </div>
+          </form>
+        </div>
+        <hr class="border-dashed">
+        <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+          <input id="search" class="px-3 py-2 border rounded w-full md:w-80" placeholder="Tìm tên/SĐT/địa chỉ">
+          <div class="flex gap-2">
+            <select id="filter-status" class="px-3 py-2 border rounded">
+              <option value="all">Tất cả</option>
+              <option value="purchased">Đã mua</option>
+              <option value="not">Chưa mua</option>
+            </select>
+            <select id="filter-source" class="px-3 py-2 border rounded">
+              <option value="all">Mọi nguồn</option>
+              <option>Khách ghé ngang</option>
+              <option>Khách online</option>
+              <option>Khách cũ giới thiệu</option>
+              <option>Khách cũ mua lại</option>
+              <option>Người quen nhân viên</option>
+              <option>Khác</option>
+            </select>
+          </div>
+        </div>
+        <div id="list" class="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      </section>
+      <aside class="w-full lg:w-72 space-y-4">
+        <div class="card p-4" data-announcements>
+          <div class="text-sm text-gray-500">Thông báo nội bộ</div>
+          <p class="text-xs text-gray-400">Chưa có thông báo.</p>
+        </div>
+        <div class="card p-4 space-y-3 text-sm text-gray-600">
+          <h2 class="text-sm font-semibold text-brand-blue">Ghi chú nhanh</h2>
+          <p>Nhập khách hàng chưa mua kèm theo những mẫu đã tư vấn và phương án tài chính để tiện CSKH về sau.</p>
+          <p>Sử dụng nút <b>CSKH</b> để chuyển nhanh sang trang chăm sóc và tiếp tục cập nhật lịch sử.</p>
+        </div>
+      </aside>
     </div>
-    <label class="block">
-      <span class="text-sm font-medium">Tình trạng</span>
-      <label class="inline-flex items-center gap-2 ml-2">
-        <input id="f-purchased" type="checkbox"> Đã mua
-      </label>
-    </label>
-    <div id="f-model-wrap" class="block hidden">
-      <span class="text-sm font-medium">Mẫu ghế & Giá</span>
-      <div class="grid grid-cols-2 gap-2">
-        <input id="f-model" class="px-3 py-2 border rounded" placeholder="VD: KY02">
-        <input id="f-price" type="number" class="px-3 py-2 border rounded" placeholder="Giá (VNĐ)">
-      </div>
-    </div>
-    <div id="f-consults-wrap" class="block hidden col-span-2">
-      <div class="flex items-center justify-between">
-        <span class="text-sm font-medium">Đã tư vấn (có thể nhiều dòng)</span>
-        <button id="add-consult" type="button" class="px-3 py-1.5 rounded bg-brand-blue text-white text-sm">+ Thêm dòng</button>
-      </div>
-      <div id="consults-list" class="mt-2 space-y-2"></div>
-    </div>
-    <label class="block col-span-2">
-      <span class="text-sm font-medium">Ghi chú</span>
-      <textarea id="f-note" class="mt-1 px-3 py-2 border rounded w-full" rows="2"></textarea>
-    </label>
-    <div class="col-span-2 flex gap-3">
-      <button id="btn-save" type="button" class="px-4 py-2 rounded-xl bg-brand-gold text-black font-semibold">Lưu</button>
-      <button id="btn-reset" type="button" class="px-4 py-2 rounded-xl bg-gray-100">Xoá form</button>
-    </div>
-  </form>
-</div>
-
-<hr class="my-6 border-dashed">
-
-<!-- List & Filters -->
-<div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-  <input id="search" class="px-3 py-2 border rounded w-full md:w-80" placeholder="Tìm tên/SĐT/địa chỉ">
-  <div class="flex gap-2">
-    <select id="filter-status" class="px-3 py-2 border rounded">
-      <option value="all">Tất cả</option>
-      <option value="purchased">Đã mua</option>
-      <option value="not">Chưa mua</option>
-    </select>
-    <select id="filter-source" class="px-3 py-2 border rounded">
-      <option value="all">Mọi nguồn</option>
-      <option>Khách ghé ngang</option>
-      <option>Khách online</option>
-      <option>Khách cũ giới thiệu</option>
-      <option>Khách cũ mua lại</option>
-      <option>Người quen nhân viên</option>
-      <option>Khác</option>
-    </select>
-  </div>
-</div>
-
-<div id="list" class="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
-
-<script type="module">
-  import '../js/modules/customers.js';
-</script>
-
   </main>
 </div>
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a]"></nav>
+<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a] flex gap-2"></nav>
+
+<script type="module">
+  import './js/modules/customers.js';
+</script>
 </body>
 </html>

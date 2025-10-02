@@ -5,61 +5,74 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>KLC – Trang chủ</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="assets/css/brand.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="assets/css/brand.css">
   <style>
     .nav-item{ display:block; padding:.6rem .8rem; border-radius:.75rem; color:#e5e7eb; }
     .nav-item:hover{ background:rgba(255,255,255,.08); }
-    .mn{ display:flex; align-items:center; justify-content:center; height:42px; border-radius:.75rem; background:#111827; color:#e5e7eb; }
   </style>
 </head>
 <body class="bg-gray-50">
 <div id="app-loading"></div>
-<div id="toast-stack"></div>
+<div id="toast-stack" class="fixed top-6 right-6 space-y-3 z-50"></div>
 
 <header id="app-header" class="bg-brand-blue text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40"></header>
 <div class="flex">
-  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white"></aside>
-  <main class="flex-1 p-4">
-    <h1 class="text-2xl font-bold mb-4 text-brand-blue">Dashboard tổng quan</h1>
-
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-  <div class="p-4 rounded-xl bg-white shadow-sm border">
-    <div class="text-gray-500 text-sm">Khách hôm nay</div>
-    <div id="card-today" class="text-3xl font-bold mt-1">0</div>
-  </div>
-  <div class="p-4 rounded-xl bg-white shadow-sm border">
-    <div class="text-gray-500 text-sm">Khách tháng này</div>
-    <div id="card-month" class="text-3xl font-bold mt-1">0</div>
-  </div>
-  <div class="p-4 rounded-xl bg-white shadow-sm border">
-    <div class="text-gray-500 text-sm">% đã mua (toàn bộ)</div>
-    <div id="card-rate" class="text-3xl font-bold mt-1">0%</div>
-  </div>
-</div>
-
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-  <div class="rounded-xl bg-white shadow-sm border p-4 h-72">
-    <div class="font-semibold mb-2">Khách theo ngày</div>
-    <canvas id="chartCustomersDay"></canvas>
-  </div>
-  <div class="rounded-xl bg-white shadow-sm border p-4 h-72">
-    <div class="font-semibold mb-2">Nguồn khách</div>
-    <canvas id="chartSource"></canvas>
-  </div>
-  <div class="rounded-xl bg-white shadow-sm border p-4 h-72">
-    <div class="font-semibold mb-2">Số dư lũy kế theo tháng</div>
-    <canvas id="chartFinance"></canvas>
-  </div>
-</div>
-
-<script type="module">
-  import '../js/modules/dashboard.js';
-  import { mountFrame } from '../js/core/ui.js';
-</script>
-
+  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white p-4 space-y-2"></aside>
+  <main class="flex-1 p-4 pb-20 space-y-6">
+    <section class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
+      <div>
+        <h1 class="text-2xl font-bold mb-4 text-brand-blue">Dashboard tổng quan</h1>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div class="p-4 rounded-xl bg-white shadow-sm border">
+            <div class="text-gray-500 text-sm">Khách hôm nay</div>
+            <div id="card-today" class="text-3xl font-bold mt-1">0</div>
+          </div>
+          <div class="p-4 rounded-xl bg-white shadow-sm border">
+            <div class="text-gray-500 text-sm">Khách tháng này</div>
+            <div id="card-month" class="text-3xl font-bold mt-1">0</div>
+          </div>
+          <div class="p-4 rounded-xl bg-white shadow-sm border">
+            <div class="text-gray-500 text-sm">% đã mua (toàn bộ)</div>
+            <div id="card-rate" class="text-3xl font-bold mt-1">0%</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="rounded-xl bg-white shadow-sm border p-4 h-72">
+            <div class="font-semibold mb-2">Khách theo ngày</div>
+            <canvas id="chartCustomersDay"></canvas>
+          </div>
+          <div class="rounded-xl bg-white shadow-sm border p-4 h-72">
+            <div class="font-semibold mb-2">Nguồn khách</div>
+            <canvas id="chartSource"></canvas>
+          </div>
+          <div class="rounded-xl bg-white shadow-sm border p-4 h-72">
+            <div class="font-semibold mb-2">Số dư lũy kế theo tháng</div>
+            <canvas id="chartFinance"></canvas>
+          </div>
+        </div>
+      </div>
+      <aside class="space-y-4">
+        <div class="card p-4" data-announcements>
+          <div class="text-sm text-gray-500">Thông báo nội bộ</div>
+          <p class="text-xs text-gray-400">Chưa có thông báo.</p>
+        </div>
+        <div class="card p-4 space-y-3">
+          <h2 class="text-sm font-semibold text-brand-blue">Hướng dẫn nhanh</h2>
+          <ul class="text-sm text-gray-600 list-disc pl-4 space-y-1">
+            <li>Cập nhật khách hàng mới ngay sau khi tiếp nhận.</li>
+            <li>Theo dõi lịch sử CSKH để không bỏ sót lịch hẹn.</li>
+            <li>Nhập phiếu Thu/Chi và Tồn kho mỗi ngày để báo cáo chính xác.</li>
+          </ul>
+        </div>
+      </aside>
+    </section>
   </main>
 </div>
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a]"></nav>
+<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a] flex gap-2"></nav>
+
+<script type="module">
+  import './js/modules/dashboard.js';
+</script>
 </body>
 </html>

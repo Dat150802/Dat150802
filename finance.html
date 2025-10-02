@@ -3,35 +3,141 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KLC – Thu & Chi</title>
+  <title>KLC – Thu &amp; Chi</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="assets/css/brand.css">
-  
   <style>
     .nav-item{ display:block; padding:.6rem .8rem; border-radius:.75rem; color:#e5e7eb; }
     .nav-item:hover{ background:rgba(255,255,255,.08); }
-    .mn{ display:flex; align-items:center; justify-content:center; height:42px; border-radius:.75rem; background:#111827; color:#e5e7eb; }
   </style>
 </head>
 <body class="bg-gray-50">
 <div id="app-loading"></div>
-<div id="toast-stack"></div>
+<div id="toast-stack" class="fixed top-6 right-6 space-y-3 z-50"></div>
 
 <header id="app-header" class="bg-brand-blue text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40"></header>
 <div class="flex">
-  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white"></aside>
-  <main class="flex-1 p-4">
-    <h1 class="text-2xl font-bold mb-4 text-brand-blue">Thu & Chi</h1>
-
-<div class="p-4 rounded-2xl bg-white shadow border">
-  <p class="text-gray-600">Trang đang trong <b>Stage 2</b>. Khung giao diện đã sẵn sàng để tích hợp form và danh sách.</p>
-</div>
-<script type="module">
-  import '../js/modules/finance.js';
-</script>
-
+  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white p-4 space-y-2"></aside>
+  <main class="flex-1 p-4 pb-24 space-y-6">
+    <div class="flex flex-col lg:flex-row gap-6">
+      <section class="flex-1 space-y-6">
+        <div>
+          <h1 class="text-2xl font-bold mb-2 text-brand-blue">Quản lý thu &amp; chi</h1>
+          <p class="text-sm text-gray-500">Ghi nhận các giao dịch tài chính và xem báo cáo theo tháng/năm.</p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="finance-summary"></div>
+        <div class="card p-5 space-y-4">
+          <form id="finance-form" onsubmit="return false" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block">
+              <span class="text-sm font-medium">Ngày</span>
+              <input id="fin-date" type="date" class="mt-1 px-3 py-2 border rounded w-full">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Loại giao dịch</span>
+              <select id="fin-type" class="mt-1 px-3 py-2 border rounded w-full">
+                <option value="thu">Thu</option>
+                <option value="chi">Chi</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Hạng mục</span>
+              <input id="fin-category" class="mt-1 px-3 py-2 border rounded w-full" placeholder="VD: Bán hàng, Chi marketing">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Số tiền</span>
+              <input id="fin-amount" type="number" class="mt-1 px-3 py-2 border rounded w-full" placeholder="0">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Hình thức</span>
+              <select id="fin-method" class="mt-1 px-3 py-2 border rounded w-full">
+                <option>Tiền mặt</option>
+                <option>Chuyển khoản</option>
+                <option>POS / Thẻ</option>
+                <option>Khác</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Người liên quan</span>
+              <input id="fin-partner" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Khách hàng / Nhà cung cấp">
+            </label>
+            <label class="block md:col-span-2">
+              <span class="text-sm font-medium">Diễn giải</span>
+              <textarea id="fin-note" class="mt-1 px-3 py-2 border rounded w-full" rows="2"></textarea>
+            </label>
+            <div class="col-span-2 flex gap-3">
+              <button id="btn-fin-save" type="button" class="px-4 py-2 rounded-xl bg-brand-gold text-black font-semibold">Lưu giao dịch</button>
+              <button id="btn-fin-reset" type="button" class="px-4 py-2 rounded-xl bg-gray-100">Xoá form</button>
+            </div>
+          </form>
+        </div>
+        <hr class="border-dashed">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="card p-4">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-sm font-semibold text-brand-blue">Báo cáo theo tháng</h2>
+              <select id="fin-report-year" class="px-3 py-2 border rounded text-sm w-28"></select>
+            </div>
+            <canvas id="fin-chart" class="h-72"></canvas>
+          </div>
+          <div class="card p-4 space-y-3 text-sm text-gray-600">
+            <h2 class="text-sm font-semibold text-brand-blue">Ghi chú quản trị</h2>
+            <p>Cập nhật đầy đủ các khoản thu/chi hằng ngày để đảm bảo báo cáo chính xác. Sử dụng bộ lọc để xem nhanh theo từng loại giao dịch.</p>
+            <div class="flex gap-2">
+              <select id="fin-filter-type" class="px-3 py-2 border rounded">
+                <option value="all">Tất cả</option>
+                <option value="thu">Thu</option>
+                <option value="chi">Chi</option>
+              </select>
+              <select id="fin-filter-method" class="px-3 py-2 border rounded">
+                <option value="all">Mọi hình thức</option>
+                <option>Tiền mặt</option>
+                <option>Chuyển khoản</option>
+                <option>POS / Thẻ</option>
+                <option>Khác</option>
+              </select>
+            </div>
+            <input id="fin-search" class="px-3 py-2 border rounded w-full" placeholder="Tìm theo hạng mục / người liên quan">
+          </div>
+        </div>
+        <div class="table-responsive bg-white shadow-sm border">
+          <table class="min-w-full text-sm" id="fin-table">
+            <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr>
+                <th class="px-3 py-2 text-left">Ngày</th>
+                <th class="px-3 py-2 text-left">Loại</th>
+                <th class="px-3 py-2 text-left">Hạng mục</th>
+                <th class="px-3 py-2 text-left">Số tiền</th>
+                <th class="px-3 py-2 text-left">Hình thức</th>
+                <th class="px-3 py-2 text-left">Người liên quan</th>
+                <th class="px-3 py-2 text-left">Diễn giải</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+      <aside class="w-full lg:w-72 space-y-4">
+        <div class="card p-4" data-announcements>
+          <div class="text-sm text-gray-500">Thông báo nội bộ</div>
+          <p class="text-xs text-gray-400">Chưa có thông báo.</p>
+        </div>
+        <div class="card p-4 space-y-3 text-sm text-gray-600">
+          <h2 class="text-sm font-semibold text-brand-blue">Lưu ý</h2>
+          <ul class="list-disc pl-4 space-y-1">
+            <li>Đối chiếu số liệu tồn kho và doanh thu mỗi cuối ngày.</li>
+            <li>Sử dụng báo cáo theo tháng để đánh giá hiệu quả chiến dịch.</li>
+            <li>Ghi rõ người liên quan để thuận tiện truy xuất thông tin.</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
   </main>
 </div>
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a]"></nav>
+<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a] flex gap-2"></nav>
+
+<script type="module">
+  import './js/modules/finance.js';
+</script>
 </body>
 </html>

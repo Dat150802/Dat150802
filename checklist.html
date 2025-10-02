@@ -6,32 +6,114 @@
   <title>KLC – CheckList Công Việc</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/brand.css">
-  
   <style>
     .nav-item{ display:block; padding:.6rem .8rem; border-radius:.75rem; color:#e5e7eb; }
     .nav-item:hover{ background:rgba(255,255,255,.08); }
-    .mn{ display:flex; align-items:center; justify-content:center; height:42px; border-radius:.75rem; background:#111827; color:#e5e7eb; }
   </style>
 </head>
 <body class="bg-gray-50">
 <div id="app-loading"></div>
-<div id="toast-stack"></div>
+<div id="toast-stack" class="fixed top-6 right-6 space-y-3 z-50"></div>
 
 <header id="app-header" class="bg-brand-blue text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40"></header>
 <div class="flex">
-  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white"></aside>
-  <main class="flex-1 p-4">
-    <h1 class="text-2xl font-bold mb-4 text-brand-blue">CheckList Công Việc</h1>
-
-<div class="p-4 rounded-2xl bg-white shadow border">
-  <p class="text-gray-600">Trang đang trong <b>Stage 2</b>. Khung giao diện đã sẵn sàng để tích hợp form và danh sách.</p>
-</div>
-<script type="module">
-  import '../js/modules/checklist.js';
-</script>
-
+  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white p-4 space-y-2"></aside>
+  <main class="flex-1 p-4 pb-24 space-y-6">
+    <div class="flex flex-col lg:flex-row gap-6">
+      <section class="flex-1 space-y-6">
+        <div>
+          <h1 class="text-2xl font-bold mb-2 text-brand-blue">CheckList Công Việc</h1>
+          <p class="text-sm text-gray-500">Lên kế hoạch chi tiết cho từng ca làm việc và theo dõi tiến độ hằng ngày.</p>
+        </div>
+        <div class="card p-5 space-y-4">
+          <form id="checklist-form" onsubmit="return false" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="block">
+              <span class="text-sm font-medium">Ngày</span>
+              <input id="cl-date" type="date" class="mt-1 px-3 py-2 border rounded w-full">
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Nhân viên</span>
+              <select id="cl-staff" class="mt-1 px-3 py-2 border rounded w-full"></select>
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Ca làm việc</span>
+              <select id="cl-shift" class="mt-1 px-3 py-2 border rounded w-full">
+                <option value="morning">Ca sáng (08:00 - 16:00)</option>
+                <option value="afternoon">Ca chiều (13:00 - 21:00)</option>
+                <option value="full">Ca full (08:00 - 21:00)</option>
+              </select>
+            </label>
+            <div class="block">
+              <span class="text-sm font-medium">Khung giờ làm việc</span>
+              <div id="cl-schedule" class="mt-1 text-xs text-gray-500 bg-gray-50 border rounded-xl px-3 py-2"></div>
+            </div>
+            <div class="md:col-span-2">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-medium">Công việc theo khung giờ</span>
+                <button id="cl-add-slot" type="button" class="px-3 py-1.5 rounded bg-brand-blue text-white text-sm">+ Thêm khung giờ</button>
+              </div>
+              <div id="cl-slots" class="space-y-3"></div>
+            </div>
+            <label class="block md:col-span-2">
+              <span class="text-sm font-medium">Tổng kết công việc</span>
+              <textarea id="cl-summary" class="mt-1 px-3 py-2 border rounded w-full" rows="3"></textarea>
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Chưa hoàn thành &amp; lý do</span>
+              <textarea id="cl-pending" class="mt-1 px-3 py-2 border rounded w-full" rows="2"></textarea>
+            </label>
+            <label class="block">
+              <span class="text-sm font-medium">Dự kiến hoàn thành</span>
+              <input id="cl-expected" type="text" class="mt-1 px-3 py-2 border rounded w-full" placeholder="VD: Ngày 05/06">
+            </label>
+            <label class="block md:col-span-2">
+              <span class="text-sm font-medium">Quản lý giao việc (ghi chú)</span>
+              <textarea id="cl-manager-note" class="mt-1 px-3 py-2 border rounded w-full" rows="2" placeholder="Nội dung giao việc từ quản lý"></textarea>
+            </label>
+            <div class="col-span-2 flex gap-3">
+              <button id="btn-cl-save" type="button" class="px-4 py-2 rounded-xl bg-brand-gold text-black font-semibold">Lưu</button>
+              <button id="btn-cl-reset" type="button" class="px-4 py-2 rounded-xl bg-gray-100">Xoá form</button>
+            </div>
+          </form>
+        </div>
+        <hr class="border-dashed">
+        <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+          <input id="cl-search" class="px-3 py-2 border rounded w-full md:w-80" placeholder="Tìm theo ngày / nhân viên / nội dung">
+          <div class="flex gap-2">
+            <select id="cl-filter-shift" class="px-3 py-2 border rounded">
+              <option value="all">Mọi ca làm</option>
+              <option value="morning">Ca sáng</option>
+              <option value="afternoon">Ca chiều</option>
+              <option value="full">Ca full</option>
+            </select>
+            <select id="cl-filter-staff" class="px-3 py-2 border rounded">
+              <option value="all">Mọi nhân viên</option>
+            </select>
+          </div>
+        </div>
+        <div id="cl-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      </section>
+      <aside class="w-full lg:w-72 space-y-4">
+        <div class="card p-4" data-announcements>
+          <div class="text-sm text-gray-500">Thông báo nội bộ</div>
+          <p class="text-xs text-gray-400">Chưa có thông báo.</p>
+        </div>
+        <div class="card p-4 space-y-3 text-sm text-gray-600">
+          <h2 class="text-sm font-semibold text-brand-blue">Mẹo quản lý checklist</h2>
+          <ul class="list-disc pl-4 space-y-1">
+            <li>Điền rõ từng khung giờ để tránh bỏ sót công việc.</li>
+            <li>Luôn cập nhật lý do chưa hoàn thành để có phương án hỗ trợ.</li>
+            <li>Dùng ghi chú giao việc để quản lý phân bổ nhiệm vụ dễ dàng.</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
   </main>
 </div>
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a]"></nav>
+<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a] flex gap-2"></nav>
+
+<script type="module">
+  import './js/modules/checklist.js';
+</script>
 </body>
 </html>
