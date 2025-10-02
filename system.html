@@ -3,64 +3,72 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KLC – Thông báo / Hệ thống</title>
+  <title>KLC Bến Lức – Thiết lập hệ thống</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/brand.css">
-  
-  <style>
-    .nav-item{ display:block; padding:.6rem .8rem; border-radius:.75rem; color:#e5e7eb; }
-    .nav-item:hover{ background:rgba(255,255,255,.08); }
-    .mn{ display:flex; align-items:center; justify-content:center; height:42px; border-radius:.75rem; background:#111827; color:#e5e7eb; }
-  </style>
 </head>
-<body class="bg-gray-50">
-<div id="app-loading"></div>
-<div id="toast-stack"></div>
+<body class="bg-slate-100">
+<div id="app-loading" class="flex"></div>
+<div id="toast-stack" class="fixed top-6 right-6 flex flex-col items-end"></div>
 
-<header id="app-header" class="bg-brand-blue text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40"></header>
-<div class="flex">
-  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white"></aside>
-  <main class="flex-1 p-4">
-    <h1 class="text-2xl font-bold mb-4 text-brand-blue">Thông báo / Hệ thống</h1>
+<div class="app-shell md:flex">
+  <aside id="app-sidebar" class="app-sidebar"></aside>
+  <div class="flex-1 min-h-screen flex flex-col">
+    <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
+    <main class="flex-1 p-4 md:p-6 space-y-6">
+      <section class="card p-5 space-y-4">
+        <div class="section-title">Tài khoản & phân quyền</div>
+        <p class="text-sm text-slate-500">Quản trị viên có thể thêm hoặc điều chỉnh tài khoản truy cập hệ thống.</p>
+        <div id="system-warning" class="hidden text-sm text-amber-600 font-semibold">Bạn không có quyền chỉnh sửa thiết lập hệ thống.</div>
+        <div id="system-form-wrapper" class="space-y-4">
+          <form id="user-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="flex flex-col">
+              <span class="text-xs text-slate-500">Tên đăng nhập</span>
+              <input type="text" name="username" class="input-brand" required>
+            </label>
+            <label class="flex flex-col">
+              <span class="text-xs text-slate-500">Tên hiển thị</span>
+              <input type="text" name="name" class="input-brand" required>
+            </label>
+            <label class="flex flex-col">
+              <span class="text-xs text-slate-500">Mật khẩu</span>
+              <input type="password" name="password" class="input-brand" required>
+            </label>
+            <label class="flex flex-col">
+              <span class="text-xs text-slate-500">Vai trò</span>
+              <select name="role" class="input-brand" required>
+                <option value="admin">Quản trị viên</option>
+                <option value="staff">Nhân viên</option>
+              </select>
+            </label>
+          </form>
+          <div class="flex gap-3">
+            <button form="user-form" type="submit" class="btn-brand px-6 py-2.5">Thêm tài khoản</button>
+            <button type="button" id="user-reset" class="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-600">Xóa form</button>
+          </div>
+        </div>
+      </section>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-  <section class="p-4 bg-white rounded-2xl shadow border">
-    <h2 class="font-semibold text-brand-blue mb-3">Nhân sự (employees)</h2>
-    <div class="flex gap-2 mb-3">
-      <input id="emp-input" class="px-3 py-2 border rounded w-full" placeholder="Tên nhân viên mới">
-      <button id="emp-add" class="px-3 py-2 rounded bg-brand-blue text-white">Thêm</button>
-    </div>
-    <ul id="emp-list"></ul>
-  </section>
-
-  <section class="p-4 bg-white rounded-2xl shadow border">
-    <h2 class="font-semibold text-brand-blue mb-3">Người dùng (users)</h2>
-    <table class="w-full text-sm">
-      <thead><tr class="text-left">
-        <th class="px-3 py-2">Username</th><th class="px-3 py-2">Tên</th><th class="px-3 py-2">Vai trò</th><th class="px-3 py-2">Kích hoạt</th>
-      </tr></thead>
-      <tbody id="user-list"></tbody>
-    </table>
-  </section>
-
-  <section class="p-4 bg-white rounded-2xl shadow border">
-    <h2 class="font-semibold text-brand-blue mb-3">Sao lưu & Phục hồi</h2>
-    <div class="flex items-center gap-3">
-      <button id="btn-export" class="px-3 py-2 rounded bg-brand-gold">Xuất JSON</button>
-      <label class="px-3 py-2 rounded bg-gray-100 cursor-pointer">
-        Nhập JSON <input id="file-import" type="file" accept="application/json" class="hidden">
-      </label>
-      <button id="btn-reset" class="px-3 py-2 rounded bg-red-500 text-white">Xoá toàn bộ LocalStorage</button>
-    </div>
-  </section>
+      <section class="card p-5">
+        <div class="section-title mb-3">Danh sách người dùng</div>
+        <div class="table-scroll">
+          <table class="min-w-full text-sm">
+            <thead class="table-brand">
+              <tr>
+                <th class="px-3 py-3 text-left">Tên đăng nhập</th>
+                <th class="px-3 py-3 text-left">Tên hiển thị</th>
+                <th class="px-3 py-3 text-left">Vai trò</th>
+              </tr>
+            </thead>
+            <tbody id="system-user-table" class="divide-y"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
 </div>
 
-<script type="module">
-  import '../js/modules/system.js';
-</script>
-
-  </main>
-</div>
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a]"></nav>
+<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-brand-blue flex gap-2 p-2"></nav>
+<script type="module" src="js/system.js"></script>
 </body>
 </html>

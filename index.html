@@ -3,42 +3,43 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KLC Bến Lức – Đăng nhập</title>
+  <title>KLC Bến Lức – Đăng nhập hệ thống</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/brand.css">
-  
-  <style>
-    .nav-item{ display:block; padding:.6rem .8rem; border-radius:.75rem; color:#e5e7eb; }
-    .nav-item:hover{ background:rgba(255,255,255,.08); }
-    .mn{ display:flex; align-items:center; justify-content:center; height:42px; border-radius:.75rem; background:#111827; color:#e5e7eb; }
-  </style>
 </head>
-<body class="bg-gray-50">
-<div id="app-loading"></div>
-<div id="toast-stack"></div>
+<body class="bg-slate-100">
+<div id="app-loading" class="flex"></div>
+<div id="toast-stack" class="fixed top-6 right-6 flex flex-col items-end"></div>
 
 <div class="min-h-screen flex items-center justify-center p-4">
-  <div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-6 border">
+  <div class="w-full max-w-md card p-6">
     <div class="flex items-center gap-3 mb-4">
-      <img src="assets/img/logo.svg" class="h-9" alt="logo"/>
-      <div class="text-xl font-bold text-brand-blue">Đăng nhập hệ thống</div>
+      <img src="assets/img/logo.svg" class="h-10" alt="KLC">
+      <div>
+        <div class="text-xl font-bold text-brand-blue">KLC Bến Lức</div>
+        <div class="text-sm text-slate-500">Cổng thông tin nội bộ</div>
+      </div>
     </div>
     <div class="space-y-3">
       <label class="block">
-        <span class="text-sm font-medium">Tài khoản</span>
-        <input id="username" class="mt-1 px-3 py-2 w-full border rounded-lg" placeholder="admin hoặc nhanvien">
+        <span class="text-sm font-medium text-slate-600">Tài khoản</span>
+        <input id="username" class="mt-1 input-brand w-full" placeholder="admin hoặc nhanvien" autocomplete="username">
       </label>
       <label class="block">
-        <span class="text-sm font-medium">Mật khẩu</span>
-        <input id="password" type="password" class="mt-1 px-3 py-2 w-full border rounded-lg" placeholder="••••••••">
+        <span class="text-sm font-medium text-slate-600">Mật khẩu</span>
+        <input id="password" type="password" class="mt-1 input-brand w-full" placeholder="••••••••" autocomplete="current-password">
       </label>
-      <label class="block">
-        <span class="text-sm font-medium">Nhớ mật khẩu</span>
-        <input id="remember" type="checkbox" class="ml-2 align-middle">
-        <span class="text-sm text-gray-500 ml-1">Duy trì đăng nhập trên thiết bị này (30 ngày)</span>
+      <label class="flex items-center gap-2 text-sm text-slate-600">
+        <input id="remember" type="checkbox" class="h-4 w-4">
+        <span>Nhớ mật khẩu và duy trì đăng nhập trên thiết bị này (30 ngày)</span>
       </label>
-      <button id="btnLogin" class="w-full py-2.5 rounded-xl bg-brand-blue text-white font-semibold">Đăng nhập</button>
-      <p class="text-sm text-gray-500">Tài khoản demo: <b>admin/klcbenluc@2025</b> hoặc <b>nhanvien/123456</b></p>
+      <button id="btnLogin" class="btn-brand w-full py-3">Đăng nhập</button>
+      <div class="text-xs text-slate-500 bg-slate-100 border border-slate-200 rounded-xl p-3">
+        <div class="font-semibold text-brand-blue mb-1">Tài khoản dùng thử</div>
+        <p>Quản trị viên: <b>admin / klcbenluc@2025</b></p>
+        <p>Nhân viên: <b>nhanvien / 123456</b></p>
+        <p class="mt-2">Quản trị viên có toàn quyền chỉnh sửa. Nhân viên chỉ được xem danh sách dữ liệu.</p>
+      </div>
     </div>
   </div>
 </div>
@@ -47,26 +48,28 @@
   import { login } from './js/core/auth.js';
   import { showLoading, hideLoading, toast } from './js/core/ui.js';
   import { seedIfEmpty } from './js/core/storage.js';
-  seedIfEmpty(); // ensure seed exists
+  seedIfEmpty();
 
-  const btn = document.getElementById('btnLogin');
+  const btn=document.getElementById('btnLogin');
   btn.addEventListener('click', async ()=>{
-    const u = document.getElementById('username').value.trim();
-    const p = document.getElementById('password').value;
-    const r = document.getElementById('remember').checked;
+    const u=document.getElementById('username').value.trim();
+    const p=document.getElementById('password').value;
+    const r=document.getElementById('remember').checked;
+    if(!u || !p){
+      toast('Vui lòng nhập đầy đủ tài khoản và mật khẩu.','error');
+      return;
+    }
     showLoading('Đang đăng nhập…');
     try{
       await login(u,p,r);
       location.href='dashboard.html';
     }catch(e){
       console.error(e);
-      toast(e.message || 'Đăng nhập thất bại', 'error');
-    }finally{ hideLoading(); }
+      toast(e.message || 'Đăng nhập thất bại','error');
+    }finally{
+      hideLoading();
+    }
   });
 </script>
-
-  </main>
-</div>
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a]"></nav>
 </body>
 </html>

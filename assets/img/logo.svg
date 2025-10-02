@@ -1,0 +1,9 @@
+<svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0.5" y="0.5" width="119" height="39" rx="12" fill="#0B265A"/>
+  <path d="M22 11L14 20L22 29" stroke="#F8FAFC" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 11H40C44.4183 11 48 14.5817 48 19C48 23.4183 44.4183 27 40 27H34V11Z" stroke="#F8FAFC" stroke-width="3"/>
+  <path d="M57 11H69" stroke="#F8FAFC" stroke-width="3" stroke-linecap="round"/>
+  <path d="M63 11V27" stroke="#F8FAFC" stroke-width="3" stroke-linecap="round"/>
+  <path d="M78 11H90L78 27H90" stroke="#F8FAFC" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="96" y="24" fill="#F8FAFC" font-family="Inter, sans-serif" font-size="10" font-weight="700">KLC</text>
+</svg>

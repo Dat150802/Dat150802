@@ -3,35 +3,172 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KLC – Bảo hành & Bảo dưỡng</title>
+  <title>KLC Bến Lức – Bảo hành & bảo dưỡng</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/brand.css">
-  
-  <style>
-    .nav-item{ display:block; padding:.6rem .8rem; border-radius:.75rem; color:#e5e7eb; }
-    .nav-item:hover{ background:rgba(255,255,255,.08); }
-    .mn{ display:flex; align-items:center; justify-content:center; height:42px; border-radius:.75rem; background:#111827; color:#e5e7eb; }
-  </style>
 </head>
-<body class="bg-gray-50">
-<div id="app-loading"></div>
-<div id="toast-stack"></div>
+<body class="bg-slate-100">
+<div id="app-loading" class="flex"></div>
+<div id="toast-stack" class="fixed top-6 right-6 flex flex-col items-end"></div>
 
-<header id="app-header" class="bg-brand-blue text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40"></header>
-<div class="flex">
-  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white"></aside>
-  <main class="flex-1 p-4">
-    <h1 class="text-2xl font-bold mb-4 text-brand-blue">Bảo hành & Bảo dưỡng</h1>
+<div class="app-shell md:flex">
+  <aside id="app-sidebar" class="app-sidebar"></aside>
+  <div class="flex-1 min-h-screen flex flex-col">
+    <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
+    <main class="flex-1 p-4 md:p-6 space-y-6">
+      <section class="card p-5 space-y-4">
+        <div class="section-title">Quản lý bảo hành & bảo dưỡng</div>
+        <p class="text-sm text-slate-500">Ghi nhận yêu cầu của khách hàng, theo dõi tình trạng xử lý và việc gửi linh kiện.</p>
+        <p id="service-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang ở chế độ nhân viên – chỉ có thể xem danh sách.</p>
+        <div class="flex flex-wrap gap-4">
+          <label class="inline-flex items-center gap-2"><input type="radio" name="serviceType" value="warranty" class="h-4 w-4" checked> Bảo hành</label>
+          <label class="inline-flex items-center gap-2"><input type="radio" name="serviceType" value="maintenance" class="h-4 w-4"> Bảo dưỡng</label>
+        </div>
+        <form id="warranty-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Ngày tiếp nhận</span>
+            <input type="date" name="date" class="input-brand" required>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Tên khách</span>
+            <input type="text" name="name" class="input-brand" required>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Số điện thoại</span>
+            <input type="tel" name="phone" class="input-brand" required>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Địa chỉ</span>
+            <input type="text" name="address" class="input-brand">
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Mẫu ghế</span>
+            <input type="text" name="product" class="input-brand">
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Tình trạng báo lỗi</span>
+            <textarea name="status" class="input-brand" rows="2"></textarea>
+          </label>
+          <label class="flex flex-col md:col-span-2">
+            <span class="text-xs text-slate-500">Yêu cầu thêm của khách</span>
+            <textarea name="extra" class="input-brand" rows="2"></textarea>
+          </label>
+        </form>
+        <form id="maintenance-form" class="grid grid-cols-1 md:grid-cols-2 gap-4 hidden">
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Ngày tiếp nhận</span>
+            <input type="date" name="date" class="input-brand" required>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Tên khách</span>
+            <input type="text" name="name" class="input-brand" required>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Số điện thoại</span>
+            <input type="tel" name="phone" class="input-brand" required>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Địa chỉ</span>
+            <input type="text" name="address" class="input-brand">
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Mẫu ghế</span>
+            <input type="text" name="product" class="input-brand">
+          </label>
+          <label class="flex flex-col md:col-span-2">
+            <span class="text-xs text-slate-500">Yêu cầu bảo dưỡng</span>
+            <textarea name="extra" class="input-brand" rows="2"></textarea>
+          </label>
+        </form>
+        <div id="service-actions" class="flex gap-3">
+          <button form="warranty-form" type="submit" class="btn-brand px-6 py-2.5">Lưu phiếu</button>
+          <button form="maintenance-form" type="submit" class="btn-brand px-6 py-2.5">Lưu phiếu</button>
+        </div>
+      </section>
 
-<div class="p-4 rounded-2xl bg-white shadow border">
-  <p class="text-gray-600">Trang đang trong <b>Stage 2</b>. Khung giao diện đã sẵn sàng để tích hợp form và danh sách.</p>
+      <section class="space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div class="section-title">Danh sách yêu cầu</div>
+          <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+            <input id="service-search" class="search-input flex-1" placeholder="Tìm theo tên, SĐT, mẫu ghế">
+            <select id="service-filter" class="input-brand">
+              <option value="all">Tất cả</option>
+              <option value="pending">Khách chưa hỗ trợ</option>
+              <option value="supported">Khách đã hỗ trợ</option>
+              <option value="parts">Đã gửi linh kiện</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div class="card p-0">
+            <div class="px-5 py-4 border-b flex items-center justify-between">
+              <div class="font-semibold text-brand-blue">Bảo hành</div>
+              <span class="badge badge-info">Phiếu bảo hành</span>
+            </div>
+            <div class="table-scroll">
+              <table class="min-w-full text-sm">
+                <thead class="table-brand">
+                  <tr>
+                    <th class="px-3 py-3 text-left">Ngày</th>
+                    <th class="px-3 py-3 text-left">Khách</th>
+                    <th class="px-3 py-3 text-left">Liên hệ</th>
+                    <th class="px-3 py-3 text-left">Sản phẩm</th>
+                    <th class="px-3 py-3 text-left">Tình trạng</th>
+                    <th class="px-3 py-3 text-left">Theo dõi</th>
+                    <th class="px-3 py-3 text-right">Chi tiết</th>
+                  </tr>
+                </thead>
+                <tbody id="warranty-list" class="divide-y"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card p-0">
+            <div class="px-5 py-4 border-b flex items-center justify-between">
+              <div class="font-semibold text-brand-blue">Bảo dưỡng</div>
+              <span class="badge badge-success">Phiếu bảo dưỡng</span>
+            </div>
+            <div class="table-scroll">
+              <table class="min-w-full text-sm">
+                <thead class="table-brand">
+                  <tr>
+                    <th class="px-3 py-3 text-left">Ngày</th>
+                    <th class="px-3 py-3 text-left">Khách</th>
+                    <th class="px-3 py-3 text-left">Liên hệ</th>
+                    <th class="px-3 py-3 text-left">Sản phẩm</th>
+                    <th class="px-3 py-3 text-left">Yêu cầu</th>
+                    <th class="px-3 py-3 text-left">Theo dõi</th>
+                    <th class="px-3 py-3 text-right">Chi tiết</th>
+                  </tr>
+                </thead>
+                <tbody id="maintenance-list" class="divide-y"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
 </div>
-<script type="module">
-  import '../js/modules/service.js';
-</script>
 
-  </main>
+<div id="service-detail" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="card max-w-2xl w-full p-6 relative space-y-3 text-sm">
+    <button id="service-detail-close" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600">Đóng</button>
+    <div class="section-title">Thông tin phiếu</div>
+    <div><span class="text-slate-500">Loại phiếu:</span> <span data-field="type"></span></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div><span class="text-slate-500">Khách:</span> <b data-field="name"></b></div>
+      <div><span class="text-slate-500">Số điện thoại:</span> <span data-field="phone"></span></div>
+      <div><span class="text-slate-500">Địa chỉ:</span> <span data-field="address"></span></div>
+      <div><span class="text-slate-500">Mẫu ghế:</span> <span data-field="product"></span></div>
+    </div>
+    <div><span class="text-slate-500">Tình trạng:</span> <span data-field="status"></span></div>
+    <div><span class="text-slate-500">Yêu cầu thêm:</span> <span data-field="extra"></span></div>
+    <div><span class="text-slate-500">Hỗ trợ:</span> <span data-field="support"></span></div>
+    <div><span class="text-slate-500">Linh kiện:</span> <span data-field="part"></span></div>
+  </div>
 </div>
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a]"></nav>
+
+<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-brand-blue flex gap-2 p-2"></nav>
+<script type="module" src="js/service.js"></script>
 </body>
 </html>

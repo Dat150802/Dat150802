@@ -3,35 +3,117 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KLC – CheckList Công Việc</title>
+  <title>KLC Bến Lức – Checklist công việc</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/brand.css">
-  
-  <style>
-    .nav-item{ display:block; padding:.6rem .8rem; border-radius:.75rem; color:#e5e7eb; }
-    .nav-item:hover{ background:rgba(255,255,255,.08); }
-    .mn{ display:flex; align-items:center; justify-content:center; height:42px; border-radius:.75rem; background:#111827; color:#e5e7eb; }
-  </style>
 </head>
-<body class="bg-gray-50">
-<div id="app-loading"></div>
-<div id="toast-stack"></div>
+<body class="bg-slate-100">
+<div id="app-loading" class="flex"></div>
+<div id="toast-stack" class="fixed top-6 right-6 flex flex-col items-end"></div>
 
-<header id="app-header" class="bg-brand-blue text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40"></header>
-<div class="flex">
-  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white"></aside>
-  <main class="flex-1 p-4">
-    <h1 class="text-2xl font-bold mb-4 text-brand-blue">CheckList Công Việc</h1>
+<div class="app-shell md:flex">
+  <aside id="app-sidebar" class="app-sidebar"></aside>
+  <div class="flex-1 min-h-screen flex flex-col">
+    <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
+    <main class="flex-1 p-4 md:p-6 space-y-6">
+      <section class="card p-5 space-y-4">
+        <div class="section-title">Lập checklist công việc</div>
+        <p class="text-sm text-slate-500">Sắp xếp công việc theo ca làm, ghi chú tiến độ và lý do chưa hoàn thành.</p>
+        <p id="checklist-staff-view" class="hidden text-sm text-amber-600 font-semibold">Tài khoản nhân viên chỉ xem được dữ liệu, không thể chỉnh sửa.</p>
+        <form id="checklist-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Ngày làm việc</span>
+            <input type="date" name="date" class="input-brand" required>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Nhân viên</span>
+            <select name="staff" class="input-brand" required>
+              <option value="Đạt">Đạt</option>
+              <option value="Huỳnh">Huỳnh</option>
+            </select>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Ca làm việc</span>
+            <select id="checklist-shift" name="shift" class="input-brand" required>
+              <option value="morning">Ca sáng (08:00 - 16:00)</option>
+              <option value="afternoon">Ca chiều (13:00 - 21:00)</option>
+              <option value="full">Ca full (08:00 - 21:00)</option>
+            </select>
+          </label>
+          <label class="flex flex-col md:col-span-2">
+            <span class="text-xs text-slate-500">Tổng kết công việc</span>
+            <textarea name="summary" class="input-brand" rows="3"></textarea>
+          </label>
+          <label class="flex flex-col md:col-span-2">
+            <span class="text-xs text-slate-500">Nếu chưa hoàn thành, lý do?</span>
+            <textarea name="pendingReason" class="input-brand" rows="2"></textarea>
+          </label>
+          <label class="flex flex-col md:col-span-2">
+            <span class="text-xs text-slate-500">Kế hoạch hoàn thành / dự kiến</span>
+            <textarea name="schedule" class="input-brand" rows="2"></textarea>
+          </label>
+          <label class="flex flex-col md:col-span-2">
+            <span class="text-xs text-slate-500">Ghi chú giao việc từ quản lý</span>
+            <textarea name="managerNote" class="input-brand" rows="2"></textarea>
+          </label>
+        </form>
+        <div class="space-y-3">
+          <div class="text-sm font-semibold text-slate-600">Chi tiết công việc theo khung giờ</div>
+          <div id="task-slots" class="space-y-2"></div>
+        </div>
+        <div id="checklist-actions" class="flex gap-3">
+          <button form="checklist-form" type="submit" class="btn-brand px-6 py-2.5">Lưu checklist</button>
+          <button type="button" id="checklist-reset" class="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-600">Xóa form</button>
+        </div>
+      </section>
 
-<div class="p-4 rounded-2xl bg-white shadow border">
-  <p class="text-gray-600">Trang đang trong <b>Stage 2</b>. Khung giao diện đã sẵn sàng để tích hợp form và danh sách.</p>
+      <section class="space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div class="section-title">Danh sách checklist</div>
+          <input id="checklist-search" class="search-input w-full md:w-80" placeholder="Tìm theo ngày, nhân viên, ca làm">
+        </div>
+        <div class="card p-0">
+          <div class="table-scroll">
+            <table class="min-w-full text-sm">
+              <thead class="table-brand">
+                <tr>
+                  <th class="px-3 py-3 text-left">Ngày</th>
+                  <th class="px-3 py-3 text-left">Nhân viên</th>
+                  <th class="px-3 py-3 text-left">Ca làm</th>
+                  <th class="px-3 py-3 text-left">Tổng kết</th>
+                  <th class="px-3 py-3 text-right">Chi tiết</th>
+                </tr>
+              </thead>
+              <tbody id="checklist-table-body" class="divide-y"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
 </div>
-<script type="module">
-  import '../js/modules/checklist.js';
-</script>
 
-  </main>
+<div id="checklist-detail" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="card max-w-2xl w-full p-6 relative space-y-4 text-sm">
+    <button id="checklist-detail-close" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600">Đóng</button>
+    <div class="section-title">Chi tiết checklist</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div><span class="text-slate-500">Ngày:</span> <span data-field="date"></span></div>
+      <div><span class="text-slate-500">Nhân viên:</span> <span data-field="staff"></span></div>
+      <div><span class="text-slate-500">Ca làm:</span> <span data-field="shift"></span></div>
+      <div><span class="text-slate-500">Tổng kết:</span> <span data-field="summary"></span></div>
+      <div><span class="text-slate-500">Lý do chưa hoàn thành:</span> <span data-field="pendingReason"></span></div>
+      <div><span class="text-slate-500">Dự kiến hoàn thành:</span> <span data-field="schedule"></span></div>
+    </div>
+    <div><span class="text-slate-500">Ghi chú quản lý:</span> <span data-field="managerNote"></span></div>
+    <div>
+      <div class="font-semibold text-brand-blue mb-2">Công việc theo giờ</div>
+      <div data-field="tasks"></div>
+    </div>
+  </div>
 </div>
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a]"></nav>
+
+<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-brand-blue flex gap-2 p-2"></nav>
+<script type="module" src="js/checklist.js"></script>
 </body>
 </html>
