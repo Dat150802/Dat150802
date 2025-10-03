@@ -64,6 +64,89 @@
           </table>
         </div>
       </section>
+
+      <section class="card p-5 space-y-4" data-admin-only>
+        <div class="section-title">Nhận diện thương hiệu & logo</div>
+        <p class="text-sm text-slate-500">Cập nhật tiêu đề, khẩu hiệu, logo chuẩn thương hiệu KLC và màu sắc chủ đạo cho toàn bộ cổng nội bộ.</p>
+        <form id="branding-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Tiêu đề hiển thị</span>
+            <input type="text" name="title" class="input-brand" placeholder="KLC Bến Lức">
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Khẩu hiệu / mô tả ngắn</span>
+            <input type="text" name="tagline" class="input-brand" placeholder="Cổng nội bộ">
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Đường dẫn logo (tùy chọn)</span>
+            <input type="url" name="logoUrl" class="input-brand" placeholder="https://...">
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Tải logo mới</span>
+            <input type="file" id="branding-upload" accept="image/*" class="input-brand">
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Màu chủ đạo</span>
+            <input type="color" name="accent" class="input-brand h-12" value="#0b7c82">
+          </label>
+        </form>
+        <div class="flex items-center gap-4">
+          <img id="branding-preview" src="assets/img/logo-klc.svg" alt="Xem trước logo">
+          <div class="text-sm text-slate-500">
+            <div><span class="font-semibold">Tiêu đề:</span> <span id="branding-preview-title"></span></div>
+            <div><span class="font-semibold">Khẩu hiệu:</span> <span id="branding-preview-tagline"></span></div>
+          </div>
+        </div>
+        <div class="flex gap-3">
+          <button id="branding-save" class="btn-brand px-6 py-2.5">Lưu nhận diện</button>
+          <button id="branding-reset" type="button" class="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-600">Khôi phục mặc định</button>
+        </div>
+      </section>
+
+      <section class="card p-5 space-y-5" data-admin-only>
+        <div>
+          <div class="section-title">Trình chỉnh sửa bố cục</div>
+          <p class="text-sm text-slate-500">Kéo thả để sắp xếp lại bố cục, thêm lối tắt, logo, khối HTML tuỳ chỉnh hoặc biểu đồ. Tất cả thay đổi được lưu và áp dụng ngay cho toàn bộ người dùng.</p>
+        </div>
+        <div id="layout-builder" class="builder-grid">
+          <div>
+            <h3 class="text-sm font-semibold text-brand-blue mb-3">Thư viện khối</h3>
+            <div id="builder-palette" class="builder-palette"></div>
+          </div>
+          <div class="space-y-3 md:col-span-1">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <h3 class="text-sm font-semibold text-brand-blue">Bố cục trang tổng quan</h3>
+              <div class="builder-item-actions">
+                <button id="builder-save" class="btn-brand px-4 py-2">Lưu bố cục</button>
+                <button id="builder-reset" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-600" type="button">Khôi phục mặc định</button>
+              </div>
+            </div>
+            <div id="builder-canvas" class="builder-canvas">
+              <div class="builder-placeholder">Kéo thả khối từ thư viện ở bên trái để bổ sung vào trang.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card p-5 space-y-4" data-admin-only>
+        <div class="section-title">Yêu cầu xóa dữ liệu</div>
+        <p class="text-sm text-slate-500">Kiểm duyệt các yêu cầu xóa đến từ nhân viên. Phê duyệt để xóa vĩnh viễn hoặc từ chối nếu cần giữ lại dữ liệu.</p>
+        <div class="table-scroll">
+          <table class="min-w-full text-sm">
+            <thead class="table-brand">
+              <tr>
+                <th class="px-3 py-3 text-left">Thời gian</th>
+                <th class="px-3 py-3 text-left">Hạng mục</th>
+                <th class="px-3 py-3 text-left">Người yêu cầu</th>
+                <th class="px-3 py-3 text-left">Lý do</th>
+                <th class="px-3 py-3 text-left">Trạng thái</th>
+                <th class="px-3 py-3 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="deletion-requests-body" class="divide-y"></tbody>
+          </table>
+        </div>
+      </section>
     </main>
   </div>
 </div>

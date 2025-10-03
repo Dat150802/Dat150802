@@ -1,10 +1,12 @@
 import { initApp } from './core/app.js';
-import { appendItem, readCollection, generateId } from './core/storage.js';
-import { showLoading, hideLoading, toast, bindSearch } from './core/ui.js';
+import { appendItem, readCollection, generateId, removeItem } from './core/storage.js';
+import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
+import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
 
 const user=initApp('finance');
 let records=readCollection('finance');
+const COLLECTION='finance';
 
 const form=document.getElementById('finance-form');
 const staffHint=document.getElementById('finance-staff-view');
@@ -21,9 +23,7 @@ setupEvents();
 
 function applyRolePermissions(){
   if(user.role==='staff'){
-    Array.from(form.elements).forEach(el=>el.disabled=true);
-    document.getElementById('finance-actions').classList.add('hidden');
-    staffHint.classList.remove('hidden');
+    staffHint?.classList.remove('hidden');
   }
 }
 
@@ -83,6 +83,7 @@ function ensureDefaultMonth(){
 }
 
 function renderTable(data){
+  const pendingIds=getPendingDeletionIds(COLLECTION);
   tableBody.innerHTML=data.map(item=>`<tr class="border-b last:border-b-0">
       <td class="px-3 py-2">${formatDate(item.date)}</td>
       <td class="px-3 py-2 font-semibold">${item.title}</td>
@@ -90,7 +91,14 @@ function renderTable(data){
       <td class="px-3 py-2">${item.type==='income'?'<span class="badge badge-success">Thu</span>':'<span class="badge badge-danger">Chi</span>'}</td>
       <td class="px-3 py-2 text-right font-semibold">${formatCurrency(item.amount)}</td>
       <td class="px-3 py-2">${item.note||'-'}</td>
+      <td class="px-3 py-2 text-right">
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          ${pendingIds.has(item.id)?'<span class="badge badge-warning">Chờ duyệt xóa</span>':''}
+          <button class="text-rose-600" data-action="delete" data-id="${item.id}">${user.role==='admin'?'Xóa':'Xóa (gửi duyệt)'}</button>
+        </div>
+      </td>
     </tr>`).join('');
+  tableBody.querySelectorAll('button[data-action="delete"]').forEach(btn=>btn.addEventListener('click',()=>handleDelete(btn.dataset.id)));
 }
 
 function renderSummary(){
@@ -131,4 +139,40 @@ function formatDate(value){
 
 function formatCurrency(value){
   return new Intl.NumberFormat('vi-VN',{ style:'currency', currency:'VND' }).format(Number(value)||0);
+}
+
+async function handleDelete(id){
+  const record=records.find(item=>item.id===id);
+  if(!record) return;
+  if(user.role==='admin'){
+    if(!await confirmAction('Bạn chắc chắn muốn xóa giao dịch này?')) return;
+    showLoading('Đang xóa giao dịch…');
+    setTimeout(()=>{
+      removeItem(COLLECTION,id);
+      resolvePendingByRecord(COLLECTION,id,'approved','Quản trị viên xóa trực tiếp giao dịch.');
+      records=readCollection(COLLECTION);
+      renderTable(records);
+      renderSummary();
+      hideLoading();
+      toast('Đã xóa giao dịch.','success');
+    },300);
+    return;
+  }
+  const pendingIds=getPendingDeletionIds(COLLECTION);
+  if(pendingIds.has(id)){
+    toast('Đã có yêu cầu xóa chờ duyệt cho giao dịch này.','info');
+    return;
+  }
+  const reason=prompt('Nhập lý do xóa giao dịch (gửi quản trị viên duyệt):','');
+  if(!reason || !reason.trim()){
+    toast('Vui lòng ghi rõ lý do xóa để gửi duyệt.','error');
+    return;
+  }
+  try{
+    submitDeletionRequest(COLLECTION,record,user,reason.trim());
+    toast('Đã gửi yêu cầu xóa giao dịch đến quản trị viên.','success');
+    renderTable(records);
+  }catch(err){
+    toast(err.message||'Không thể gửi yêu cầu xóa.','error');
+  }
 }

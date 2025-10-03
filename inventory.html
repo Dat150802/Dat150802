@@ -18,8 +18,8 @@
     <main class="flex-1 p-4 md:p-6 space-y-6">
       <section class="card p-5 space-y-4">
         <div class="section-title">Cập nhật xuất nhập tồn</div>
-        <p class="text-sm text-slate-500">Theo dõi lượng hàng xuất/nhập mỗi ngày để kiểm soát hàng tồn.</p>
-        <p id="inventory-staff-view" class="hidden text-sm text-amber-600 font-semibold">Nhân viên chỉ xem được dữ liệu, không thể cập nhật tồn kho.</p>
+        <p class="text-sm text-slate-500">Theo dõi lượng hàng xuất/nhập mỗi ngày để kiểm soát hàng tồn. Nhân viên có thể nhập, chỉnh sửa và gửi yêu cầu xóa.</p>
+        <p id="inventory-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang đăng nhập với quyền nhân viên: hãy ghi rõ lý do khi gửi yêu cầu xóa bản ghi tồn kho.</p>
         <form id="inventory-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <label class="flex flex-col">
             <span class="text-xs text-slate-500">Ngày</span>
@@ -75,11 +75,13 @@
                   <th class="px-3 py-3 text-left">Loại</th>
                   <th class="px-3 py-3 text-left">Số lượng</th>
                   <th class="px-3 py-3 text-left">Ghi chú</th>
+                  <th class="px-3 py-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody id="inventory-table-body" class="divide-y"></tbody>
             </table>
           </div>
+          <div class="sticky-actions text-sm text-slate-500">Nhấn “Xóa” để gửi yêu cầu duyệt hoặc xóa ngay nếu bạn là quản trị viên.</div>
         </div>
       </section>
 

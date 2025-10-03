@@ -1,10 +1,12 @@
 import { initApp } from './core/app.js';
-import { appendItem, readCollection, updateItem, generateId } from './core/storage.js';
-import { showLoading, hideLoading, toast, bindSearch } from './core/ui.js';
+import { appendItem, readCollection, updateItem, generateId, removeItem } from './core/storage.js';
+import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
+import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
 
 const user=initApp('service');
 let services=readCollection('services');
+const COLLECTION='services';
 
 const typeRadios=document.querySelectorAll('input[name="serviceType"]');
 const warrantyForm=document.getElementById('warranty-form');
@@ -21,9 +23,7 @@ setupEvents();
 
 function applyRolePermissions(){
   if(user.role==='staff'){
-    [...warrantyForm.elements,...maintenanceForm.elements].forEach(el=>el.disabled=true);
-    document.getElementById('service-actions').classList.add('hidden');
-    staffHint.classList.remove('hidden');
+    staffHint?.classList.remove('hidden');
   }
 }
 
@@ -106,14 +106,15 @@ function toggleForms(){
 }
 
 function renderLists(data){
+  const pendingIds=getPendingDeletionIds(COLLECTION);
   const warrantyData=data.filter(item=>item.type==='warranty');
   const maintenanceData=data.filter(item=>item.type==='maintenance');
-  warrantyList.innerHTML=warrantyData.map(item=>renderRow(item)).join('');
-  maintenanceList.innerHTML=maintenanceData.map(item=>renderRow(item)).join('');
+  warrantyList.innerHTML=warrantyData.map(item=>renderRow(item,pendingIds)).join('');
+  maintenanceList.innerHTML=maintenanceData.map(item=>renderRow(item,pendingIds)).join('');
   bindRowEvents();
 }
 
-function renderRow(item){
+function renderRow(item,pendingIds){
   return `<tr class="border-b last:border-b-0">
     <td class="px-3 py-2">${formatDate(item.date)}</td>
     <td class="px-3 py-2 font-semibold">${item.name}</td>
@@ -124,7 +125,13 @@ function renderRow(item){
       <label class="inline-flex items-center gap-1 text-sm"><input type="checkbox" data-action="support" data-id="${item.id}" ${item.support?'checked':''}> Đã hỗ trợ</label>
       <label class="inline-flex items-center gap-1 text-sm"><input type="checkbox" data-action="part" data-id="${item.id}" ${item.partSent?'checked':''}> Gửi linh kiện</label>
     </td>
-    <td class="px-3 py-2 text-right"><button class="text-brand-blue" data-action="detail" data-id="${item.id}">Chi tiết</button></td>
+    <td class="px-3 py-2 text-right">
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        ${pendingIds.has(item.id)?'<span class="badge badge-warning">Chờ duyệt xóa</span>':''}
+        <button class="text-brand-blue" data-action="detail" data-id="${item.id}">Chi tiết</button>
+        <button class="text-rose-600" data-action="delete" data-id="${item.id}">${user.role==='admin'?'Xóa':'Xóa (gửi duyệt)'}</button>
+      </div>
+    </td>
   </tr>`;
 }
 
@@ -153,6 +160,9 @@ function bindRowEvents(){
   });
   document.querySelectorAll('button[data-action="detail"]').forEach(btn=>{
     btn.addEventListener('click',()=>showServiceDetail(btn.dataset.id));
+  });
+  document.querySelectorAll('button[data-action="delete"]').forEach(btn=>{
+    btn.addEventListener('click',()=>handleDelete(btn.dataset.id));
   });
 }
 
@@ -204,4 +214,39 @@ function applyFilter(){
   }
   renderLists(filtered);
   return filtered;
+}
+
+async function handleDelete(id){
+  const record=services.find(item=>item.id===id);
+  if(!record) return;
+  if(user.role==='admin'){
+    if(!await confirmAction('Bạn chắc chắn muốn xóa phiếu dịch vụ này?')) return;
+    showLoading('Đang xóa phiếu dịch vụ…');
+    setTimeout(()=>{
+      removeItem(COLLECTION,id);
+      resolvePendingByRecord(COLLECTION,id,'approved','Quản trị viên xóa trực tiếp phiếu dịch vụ.');
+      services=readCollection(COLLECTION);
+      applyFilter();
+      hideLoading();
+      toast('Đã xóa phiếu dịch vụ.','success');
+    },300);
+    return;
+  }
+  const pendingIds=getPendingDeletionIds(COLLECTION);
+  if(pendingIds.has(id)){
+    toast('Đã có yêu cầu xóa chờ duyệt cho phiếu này.','info');
+    return;
+  }
+  const reason=prompt('Nhập lý do xóa phiếu dịch vụ (gửi quản trị viên duyệt):','');
+  if(!reason || !reason.trim()){
+    toast('Vui lòng ghi rõ lý do xóa để gửi duyệt.','error');
+    return;
+  }
+  try{
+    submitDeletionRequest(COLLECTION,record,user,reason.trim());
+    toast('Đã gửi yêu cầu xóa phiếu dịch vụ đến quản trị viên.','success');
+    applyFilter();
+  }catch(err){
+    toast(err.message||'Không thể gửi yêu cầu xóa.','error');
+  }
 }

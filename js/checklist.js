@@ -1,10 +1,12 @@
 import { initApp } from './core/app.js';
-import { appendItem, readCollection, generateId } from './core/storage.js';
-import { showLoading, hideLoading, toast, bindSearch } from './core/ui.js';
+import { appendItem, readCollection, generateId, removeItem } from './core/storage.js';
+import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
+import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
 
 const user=initApp('checklist');
 let checklists=readCollection('checklists');
+const COLLECTION='checklists';
 
 const form=document.getElementById('checklist-form');
 const staffHint=document.getElementById('checklist-staff-view');
@@ -20,9 +22,7 @@ updateSlots();
 
 function applyRolePermissions(){
   if(user.role==='staff'){
-    Array.from(form.elements).forEach(el=>el.disabled=true);
-    document.getElementById('checklist-actions').classList.add('hidden');
-    staffHint.classList.remove('hidden');
+    staffHint?.classList.remove('hidden');
   }
 }
 
@@ -85,14 +85,22 @@ function collectFormData(){
 }
 
 function renderTable(data){
+  const pendingIds=getPendingDeletionIds(COLLECTION);
   tableBody.innerHTML=data.map(item=>`<tr class="border-b last:border-b-0">
       <td class="px-3 py-2">${formatDate(item.date)}</td>
       <td class="px-3 py-2 font-semibold">${item.staff}</td>
       <td class="px-3 py-2">${item.shiftLabel}</td>
       <td class="px-3 py-2">${item.summary||'-'}</td>
-      <td class="px-3 py-2 text-right"><button class="text-brand-blue" data-id="${item.id}">Xem</button></td>
+      <td class="px-3 py-2 text-right">
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          ${pendingIds.has(item.id)?'<span class="badge badge-warning">Chờ duyệt xóa</span>':''}
+          <button class="text-brand-blue" data-action="view" data-id="${item.id}">Xem</button>
+          <button class="text-rose-600" data-action="delete" data-id="${item.id}">${user.role==='admin'?'Xóa':'Xóa (gửi duyệt)'}</button>
+        </div>
+      </td>
     </tr>`).join('');
-  tableBody.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>showDetail(btn.dataset.id)));
+  tableBody.querySelectorAll('button[data-action="view"]').forEach(btn=>btn.addEventListener('click',()=>showDetail(btn.dataset.id)));
+  tableBody.querySelectorAll('button[data-action="delete"]').forEach(btn=>btn.addEventListener('click',()=>handleDelete(btn.dataset.id)));
 }
 
 function showDetail(id){
@@ -138,4 +146,39 @@ function formatDate(value){
   const d=new Date(value);
   if(Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString('vi-VN');
+}
+
+async function handleDelete(id){
+  const record=checklists.find(item=>item.id===id);
+  if(!record) return;
+  if(user.role==='admin'){
+    if(!await confirmAction('Bạn chắc chắn muốn xóa checklist này?')) return;
+    showLoading('Đang xóa checklist…');
+    setTimeout(()=>{
+      removeItem(COLLECTION,id);
+      resolvePendingByRecord(COLLECTION,id,'approved','Quản trị viên xóa trực tiếp checklist.');
+      checklists=readCollection(COLLECTION);
+      renderTable(checklists);
+      hideLoading();
+      toast('Đã xóa checklist.','success');
+    },300);
+    return;
+  }
+  const pendingIds=getPendingDeletionIds(COLLECTION);
+  if(pendingIds.has(id)){
+    toast('Đã có yêu cầu xóa chờ duyệt cho checklist này.','info');
+    return;
+  }
+  const reason=prompt('Nhập lý do xóa checklist (gửi quản trị viên duyệt):','');
+  if(!reason || !reason.trim()){
+    toast('Vui lòng ghi rõ lý do xóa để gửi duyệt.','error');
+    return;
+  }
+  try{
+    submitDeletionRequest(COLLECTION,record,user,reason.trim());
+    toast('Đã gửi yêu cầu xóa checklist đến quản trị viên.','success');
+    renderTable(checklists);
+  }catch(err){
+    toast(err.message||'Không thể gửi yêu cầu xóa.','error');
+  }
 }

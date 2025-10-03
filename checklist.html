@@ -18,8 +18,8 @@
     <main class="flex-1 p-4 md:p-6 space-y-6">
       <section class="card p-5 space-y-4">
         <div class="section-title">Lập checklist công việc</div>
-        <p class="text-sm text-slate-500">Sắp xếp công việc theo ca làm, ghi chú tiến độ và lý do chưa hoàn thành.</p>
-        <p id="checklist-staff-view" class="hidden text-sm text-amber-600 font-semibold">Tài khoản nhân viên chỉ xem được dữ liệu, không thể chỉnh sửa.</p>
+        <p class="text-sm text-slate-500">Sắp xếp công việc theo ca làm, ghi chú tiến độ và lý do chưa hoàn thành. Nhân viên có thể cập nhật checklist và gửi yêu cầu xóa.</p>
+        <p id="checklist-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang đăng nhập với quyền nhân viên: hãy mô tả lý do rõ ràng khi gửi yêu cầu xóa để quản trị viên duyệt.</p>
         <form id="checklist-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label class="flex flex-col">
             <span class="text-xs text-slate-500">Ngày làm việc</span>
@@ -81,12 +81,13 @@
                   <th class="px-3 py-3 text-left">Nhân viên</th>
                   <th class="px-3 py-3 text-left">Ca làm</th>
                   <th class="px-3 py-3 text-left">Tổng kết</th>
-                  <th class="px-3 py-3 text-right">Chi tiết</th>
+                  <th class="px-3 py-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody id="checklist-table-body" class="divide-y"></tbody>
             </table>
           </div>
+          <div class="sticky-actions text-sm text-slate-500">Nhân viên nhấn “Xóa” để gửi yêu cầu – quản trị viên có thể xóa ngay.</div>
         </div>
       </section>
     </main>

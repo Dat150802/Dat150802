@@ -18,8 +18,8 @@
     <main class="flex-1 p-4 md:p-6 space-y-6">
       <section class="card p-5 space-y-4">
         <div class="section-title">Quản lý bảo hành & bảo dưỡng</div>
-        <p class="text-sm text-slate-500">Ghi nhận yêu cầu của khách hàng, theo dõi tình trạng xử lý và việc gửi linh kiện.</p>
-        <p id="service-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang ở chế độ nhân viên – chỉ có thể xem danh sách.</p>
+        <p class="text-sm text-slate-500">Ghi nhận yêu cầu của khách hàng, theo dõi tình trạng xử lý và việc gửi linh kiện. Nhân viên có thể nhập dữ liệu và gửi yêu cầu xóa.</p>
+        <p id="service-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang ở chế độ nhân viên: có thể cập nhật phiếu, khi muốn xóa hãy nêu rõ lý do để quản trị viên duyệt.</p>
         <div class="flex flex-wrap gap-4">
           <label class="inline-flex items-center gap-2"><input type="radio" name="serviceType" value="warranty" class="h-4 w-4" checked> Bảo hành</label>
           <label class="inline-flex items-center gap-2"><input type="radio" name="serviceType" value="maintenance" class="h-4 w-4"> Bảo dưỡng</label>
@@ -115,14 +115,15 @@
                     <th class="px-3 py-3 text-left">Sản phẩm</th>
                     <th class="px-3 py-3 text-left">Tình trạng</th>
                     <th class="px-3 py-3 text-left">Theo dõi</th>
-                    <th class="px-3 py-3 text-right">Chi tiết</th>
+                    <th class="px-3 py-3 text-right">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody id="warranty-list" class="divide-y"></tbody>
-              </table>
-            </div>
+            </table>
           </div>
-          <div class="card p-0">
+          <div class="sticky-actions text-sm text-slate-500">Nhấn “Xóa” để gửi yêu cầu duyệt hoặc xóa ngay nếu bạn là quản trị viên.</div>
+        </div>
+        <div class="card p-0">
             <div class="px-5 py-4 border-b flex items-center justify-between">
               <div class="font-semibold text-brand-blue">Bảo dưỡng</div>
               <span class="badge badge-success">Phiếu bảo dưỡng</span>
@@ -137,12 +138,13 @@
                     <th class="px-3 py-3 text-left">Sản phẩm</th>
                     <th class="px-3 py-3 text-left">Yêu cầu</th>
                     <th class="px-3 py-3 text-left">Theo dõi</th>
-                    <th class="px-3 py-3 text-right">Chi tiết</th>
-                  </tr>
-                </thead>
-                <tbody id="maintenance-list" class="divide-y"></tbody>
-              </table>
-            </div>
+                    <th class="px-3 py-3 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="maintenance-list" class="divide-y"></tbody>
+            </table>
+          </div>
+          <div class="sticky-actions text-sm text-slate-500">Nhấn “Xóa” để gửi yêu cầu duyệt hoặc xóa ngay nếu bạn là quản trị viên.</div>
           </div>
         </div>
       </section>

@@ -1,11 +1,13 @@
 import { initApp } from './core/app.js';
-import { appendItem, readCollection, generateId } from './core/storage.js';
-import { showLoading, hideLoading, toast, bindSearch } from './core/ui.js';
+import { appendItem, readCollection, generateId, removeItem } from './core/storage.js';
+import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
+import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
 
 const user=initApp('care');
 let careRecords=readCollection('care');
 const customers=readCollection('customers');
+const COLLECTION='care';
 
 const form=document.getElementById('care-form');
 const staffHint=document.getElementById('care-staff-view');
@@ -21,9 +23,7 @@ setupEvents();
 
 function applyRolePermissions(){
   if(user.role==='staff'){
-    Array.from(form.elements).forEach(el=>el.disabled=true);
-    document.getElementById('care-form-actions').classList.add('hidden');
-    staffHint.classList.remove('hidden');
+    staffHint?.classList.remove('hidden');
   }
 }
 
@@ -108,6 +108,7 @@ function collectFormData(){
 }
 
 function renderCareTable(data){
+  const pendingIds=getPendingDeletionIds(COLLECTION);
   tableBody.innerHTML=data.map(item=>`<tr class="border-b last:border-b-0">
       <td class="px-3 py-2">${formatDate(item.date)}</td>
       <td class="px-3 py-2 font-semibold">${item.name}</td>
@@ -115,10 +116,19 @@ function renderCareTable(data){
       <td class="px-3 py-2">${item.staff}</td>
       <td class="px-3 py-2">${item.channel}</td>
       <td class="px-3 py-2">${item.ratingLabel}</td>
-      <td class="px-3 py-2 text-right"><button class="text-brand-blue" data-id="${item.id}" data-action="view">Chi tiết</button></td>
+      <td class="px-3 py-2">
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          ${pendingIds.has(item.id)?'<span class="badge badge-warning">Chờ duyệt xóa</span>':''}
+          <button class="text-brand-blue" data-id="${item.id}" data-action="view">Chi tiết</button>
+          <button class="text-rose-600" data-id="${item.id}" data-action="delete">${user.role==='admin'?'Xóa':'Xóa (gửi duyệt)'}</button>
+        </div>
+      </td>
     </tr>`).join('');
   tableBody.querySelectorAll('button[data-action="view"]').forEach(btn=>{
     btn.addEventListener('click',()=>showCareDetail(btn.dataset.id));
+  });
+  tableBody.querySelectorAll('button[data-action="delete"]').forEach(btn=>{
+    btn.addEventListener('click',()=>handleDelete(btn.dataset.id));
   });
 }
 
@@ -149,4 +159,39 @@ function formatDate(value){
   const d=new Date(value);
   if(Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString('vi-VN');
+}
+
+async function handleDelete(id){
+  const record=careRecords.find(item=>item.id===id);
+  if(!record) return;
+  if(user.role==='admin'){
+    if(!await confirmAction('Bạn chắc chắn muốn xóa lịch sử CSKH này?')) return;
+    showLoading('Đang xóa lịch sử CSKH…');
+    setTimeout(()=>{
+      removeItem(COLLECTION,id);
+      resolvePendingByRecord(COLLECTION,id,'approved','Quản trị viên xóa trực tiếp trong danh sách CSKH.');
+      careRecords=readCollection(COLLECTION);
+      renderCareTable(careRecords);
+      hideLoading();
+      toast('Đã xóa lịch sử chăm sóc khách hàng.','success');
+    },300);
+    return;
+  }
+  const pendingIds=getPendingDeletionIds(COLLECTION);
+  if(pendingIds.has(id)){
+    toast('Đã có yêu cầu xóa chờ duyệt cho bản ghi này.','info');
+    return;
+  }
+  const reason=prompt('Nhập lý do xóa lịch sử CSKH (gửi quản trị viên duyệt):','');
+  if(!reason || !reason.trim()){
+    toast('Vui lòng ghi rõ lý do xóa để gửi duyệt.','error');
+    return;
+  }
+  try{
+    submitDeletionRequest(COLLECTION,record,user,reason.trim());
+    toast('Đã gửi yêu cầu xóa lịch sử CSKH đến quản trị viên.','success');
+    renderCareTable(careRecords);
+  }catch(err){
+    toast(err.message||'Không thể gửi yêu cầu xóa.','error');
+  }
 }

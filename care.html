@@ -18,8 +18,8 @@
     <main class="flex-1 p-4 md:p-6 space-y-6">
       <section class="card p-5 space-y-4">
         <div class="section-title">Ghi nhận chăm sóc khách hàng</div>
-        <p class="text-sm text-slate-500">Lưu lại lịch sử tương tác với khách để tiện theo dõi. Nhân viên chỉ được quyền xem lại dữ liệu.</p>
-        <p id="care-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn chỉ có quyền xem danh sách, không thể thêm mới.</p>
+        <p class="text-sm text-slate-500">Lưu lại lịch sử tương tác với khách để tiện theo dõi. Nhân viên có thể nhập dữ liệu và gửi yêu cầu xóa khi cần.</p>
+        <p id="care-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang đăng nhập với quyền nhân viên: có thể cập nhật CSKH, khi xóa vui lòng giải thích rõ để quản trị viên duyệt.</p>
         <form id="care-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label class="flex flex-col">
             <span class="text-xs text-slate-500">Ngày CSKH</span>
@@ -109,6 +109,7 @@
               <tbody id="care-table-body" class="divide-y"></tbody>
             </table>
           </div>
+          <div class="sticky-actions text-sm text-slate-500">Nhấn “Xóa” để gửi yêu cầu duyệt (nhân viên) hoặc xóa ngay (quản trị viên).</div>
         </div>
       </section>
     </main>

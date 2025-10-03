@@ -14,31 +14,30 @@
 <div class="min-h-screen flex items-center justify-center p-4">
   <div class="w-full max-w-md card p-6">
     <div class="flex items-center gap-3 mb-4">
-      <img src="assets/img/logo.svg" class="h-10" alt="KLC">
+      <img id="brand-logo" src="assets/img/logo-klc.svg" class="h-10 rounded-lg bg-white shadow-sm" alt="Logo KLC Bến Lức">
       <div>
-        <div class="text-xl font-bold text-brand-blue">KLC Bến Lức</div>
-        <div class="text-sm text-slate-500">Cổng thông tin nội bộ</div>
+        <div id="brand-title" class="text-xl font-bold text-brand-blue">KLC Bến Lức</div>
+        <div id="brand-tagline" class="text-sm text-slate-500">Cổng thông tin nội bộ</div>
       </div>
     </div>
     <div class="space-y-3">
       <label class="block">
         <span class="text-sm font-medium text-slate-600">Tài khoản</span>
-        <input id="username" class="mt-1 input-brand w-full" placeholder="admin hoặc nhanvien" autocomplete="username">
+        <input id="username" class="mt-1 input-brand w-full" placeholder="Tên đăng nhập" autocomplete="username">
       </label>
       <label class="block">
         <span class="text-sm font-medium text-slate-600">Mật khẩu</span>
-        <input id="password" type="password" class="mt-1 input-brand w-full" placeholder="••••••••" autocomplete="current-password">
+        <input id="password" type="password" class="mt-1 input-brand w-full" placeholder="Mật khẩu" autocomplete="current-password">
       </label>
       <label class="flex items-center gap-2 text-sm text-slate-600">
         <input id="remember" type="checkbox" class="h-4 w-4">
         <span>Nhớ mật khẩu và duy trì đăng nhập trên thiết bị này (30 ngày)</span>
       </label>
       <button id="btnLogin" class="btn-brand w-full py-3">Đăng nhập</button>
-      <div class="text-xs text-slate-500 bg-slate-100 border border-slate-200 rounded-xl p-3">
-        <div class="font-semibold text-brand-blue mb-1">Tài khoản dùng thử</div>
-        <p>Quản trị viên: <b>admin / klcbenluc@2025</b></p>
-        <p>Nhân viên: <b>nhanvien / 123456</b></p>
-        <p class="mt-2">Quản trị viên có toàn quyền chỉnh sửa. Nhân viên chỉ được xem danh sách dữ liệu.</p>
+      <div class="text-xs text-slate-500 bg-slate-100 border border-slate-200 rounded-xl p-3 space-y-1">
+        <p><span class="font-semibold text-brand-blue">Quản trị viên</span> có toàn quyền chỉnh sửa, thiết kế bố cục và thiết lập hệ thống.</p>
+        <p><span class="font-semibold text-amber-600">Nhân viên</span> được nhập dữ liệu, gửi yêu cầu xóa khi cần và không truy cập mục Thiết lập hệ thống.</p>
+        <p class="pt-1 border-t border-dashed">Liên hệ quản trị viên để được cấp hoặc thay đổi tài khoản phù hợp.</p>
       </div>
     </div>
   </div>
@@ -47,8 +46,13 @@
 <script type="module">
   import { login } from './js/core/auth.js';
   import { showLoading, hideLoading, toast } from './js/core/ui.js';
-  import { seedIfEmpty } from './js/core/storage.js';
+  import { seedIfEmpty, applyBrandingTheme } from './js/core/storage.js';
   seedIfEmpty();
+  const branding=applyBrandingTheme();
+  const logo=document.getElementById('brand-logo');
+  if(branding.logo) logo.src=branding.logo;
+  document.getElementById('brand-title').innerText=branding.title||'KLC Bến Lức';
+  document.getElementById('brand-tagline').innerText=branding.tagline||'Cổng thông tin nội bộ';
 
   const btn=document.getElementById('btnLogin');
   btn.addEventListener('click', async ()=>{

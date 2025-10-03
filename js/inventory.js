@@ -1,10 +1,12 @@
 import { initApp } from './core/app.js';
-import { appendItem, readCollection, generateId } from './core/storage.js';
-import { showLoading, hideLoading, toast, bindSearch } from './core/ui.js';
+import { appendItem, readCollection, generateId, removeItem } from './core/storage.js';
+import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
+import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
 
 const user=initApp('inventory');
 let records=readCollection('inventory');
+const COLLECTION='inventory';
 
 const form=document.getElementById('inventory-form');
 const staffHint=document.getElementById('inventory-staff-view');
@@ -18,9 +20,7 @@ setupEvents();
 
 function applyRolePermissions(){
   if(user.role==='staff'){
-    Array.from(form.elements).forEach(el=>el.disabled=true);
-    document.getElementById('inventory-actions').classList.add('hidden');
-    staffHint.classList.remove('hidden');
+    staffHint?.classList.remove('hidden');
   }
 }
 
@@ -69,6 +69,7 @@ function setupEvents(){
 }
 
 function renderTables(data){
+  const pendingIds=getPendingDeletionIds(COLLECTION);
   tableBody.innerHTML=data.map(item=>`<tr class="border-b last:border-b-0">
       <td class="px-3 py-2">${formatDate(item.date)}</td>
       <td class="px-3 py-2 font-semibold">${item.product}</td>
@@ -76,7 +77,14 @@ function renderTables(data){
       <td class="px-3 py-2">${item.type==='import'?'<span class="badge badge-success">Nhập</span>':'<span class="badge badge-danger">Xuất</span>'}</td>
       <td class="px-3 py-2">${item.quantity} ${item.unit||''}</td>
       <td class="px-3 py-2">${item.note||'-'}</td>
+      <td class="px-3 py-2 text-right">
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          ${pendingIds.has(item.id)?'<span class="badge badge-warning">Chờ duyệt xóa</span>':''}
+          <button class="text-rose-600" data-action="delete" data-id="${item.id}">${user.role==='admin'?'Xóa':'Xóa (gửi duyệt)'}</button>
+        </div>
+      </td>
     </tr>`).join('');
+  tableBody.querySelectorAll('button[data-action="delete"]').forEach(btn=>btn.addEventListener('click',()=>handleDelete(btn.dataset.id)));
   renderSummary(data);
 }
 
@@ -99,4 +107,39 @@ function formatDate(value){
   const d=new Date(value);
   if(Number.isNaN(d.getTime())) return value;
   return d.toLocaleDateString('vi-VN');
+}
+
+async function handleDelete(id){
+  const record=records.find(item=>item.id===id);
+  if(!record) return;
+  if(user.role==='admin'){
+    if(!await confirmAction('Bạn chắc chắn muốn xóa bản ghi tồn kho này?')) return;
+    showLoading('Đang xóa bản ghi tồn kho…');
+    setTimeout(()=>{
+      removeItem(COLLECTION,id);
+      resolvePendingByRecord(COLLECTION,id,'approved','Quản trị viên xóa trực tiếp bản ghi tồn kho.');
+      records=readCollection(COLLECTION);
+      renderTables(records);
+      hideLoading();
+      toast('Đã xóa bản ghi tồn kho.','success');
+    },300);
+    return;
+  }
+  const pendingIds=getPendingDeletionIds(COLLECTION);
+  if(pendingIds.has(id)){
+    toast('Đã có yêu cầu xóa chờ duyệt cho bản ghi này.','info');
+    return;
+  }
+  const reason=prompt('Nhập lý do xóa bản ghi tồn kho (gửi quản trị viên duyệt):','');
+  if(!reason || !reason.trim()){
+    toast('Vui lòng ghi rõ lý do xóa để gửi duyệt.','error');
+    return;
+  }
+  try{
+    submitDeletionRequest(COLLECTION,record,user,reason.trim());
+    toast('Đã gửi yêu cầu xóa bản ghi tồn kho đến quản trị viên.','success');
+    renderTables(records);
+  }catch(err){
+    toast(err.message||'Không thể gửi yêu cầu xóa.','error');
+  }
 }

@@ -63,7 +63,15 @@ export function logout(){
 
 export function ensurePermission(user, action){
   if(user.role==='admin') return true;
-  if(action==='read') return true;
+  if(action==='read' || action==='write') return true;
+  if(action==='delete'){
+    toast('Nhân viên không thể xóa trực tiếp – vui lòng gửi yêu cầu duyệt cho quản trị viên.','error');
+    return false;
+  }
+  if(action==='system'){
+    toast('Bạn không có quyền truy cập khu vực thiết lập hệ thống.','error');
+    return false;
+  }
   toast('Bạn không có quyền thực hiện thao tác này.','error');
   return false;
 }

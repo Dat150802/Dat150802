@@ -16,58 +16,7 @@
   <aside id="app-sidebar" class="app-sidebar"></aside>
   <div class="flex-1 min-h-screen flex flex-col">
     <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
-    <main class="flex-1 p-4 md:p-6 space-y-6" id="page-content">
-      <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div class="card p-5">
-          <div class="text-sm text-slate-500">Tổng số khách hàng</div>
-          <div id="card-total-customers" class="text-3xl font-bold text-brand-blue mt-2">0</div>
-        </div>
-        <div class="card p-5">
-          <div class="text-sm text-slate-500">CSKH trong ngày</div>
-          <div id="card-today-care" class="text-3xl font-bold text-brand-blue mt-2">0</div>
-        </div>
-        <div class="card p-5">
-          <div class="text-sm text-slate-500">Doanh thu cộng dồn</div>
-          <div id="card-revenue" class="text-3xl font-bold text-emerald-600 mt-2">0</div>
-        </div>
-        <div class="card p-5">
-          <div class="text-sm text-slate-500">Chi phí cộng dồn</div>
-          <div id="card-expense" class="text-3xl font-bold text-rose-600 mt-2">0</div>
-        </div>
-      </section>
-
-      <section class="card p-5">
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-          <div class="section-title">Báo cáo thu chi theo khoảng ngày</div>
-          <form id="filter-range" class="flex flex-wrap items-end gap-3">
-            <label class="flex flex-col">
-              <span class="text-xs text-slate-500">Từ ngày</span>
-              <input type="date" name="from" class="input-brand" />
-            </label>
-            <label class="flex flex-col">
-              <span class="text-xs text-slate-500">Đến ngày</span>
-              <input type="date" name="to" class="input-brand" />
-            </label>
-            <button class="btn-brand px-5 py-2" type="submit">Lọc dữ liệu</button>
-          </form>
-        </div>
-        <div id="range-summary" class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-600"></div>
-      </section>
-
-      <section class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div class="card p-5 xl:col-span-2">
-          <div class="flex items-center justify-between mb-4">
-            <div class="section-title">Hiệu suất thu chi theo tháng</div>
-            <span class="text-sm text-slate-500">12 tháng gần nhất</span>
-          </div>
-          <canvas id="finance-chart" class="max-h-[320px]"></canvas>
-        </div>
-        <div class="card p-5">
-          <div class="section-title mb-3">Hoạt động mới nhất</div>
-          <ul id="recent-activities" class="divide-y divide-slate-200"></ul>
-        </div>
-      </section>
-    </main>
+    <main id="page-content" class="flex-1 p-4 md:p-6 space-y-6"></main>
   </div>
 </div>
 

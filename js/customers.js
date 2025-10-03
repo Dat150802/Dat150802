@@ -1,10 +1,12 @@
 import { initApp } from './core/app.js';
-import { appendItem, readCollection, generateId } from './core/storage.js';
-import { showLoading, hideLoading, toast, bindSearch } from './core/ui.js';
+import { appendItem, readCollection, generateId, removeItem } from './core/storage.js';
+import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
+import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
 
 const user=initApp('customers');
 let customers=readCollection('customers');
+const COLLECTION='customers';
 
 const form=document.getElementById('customer-form');
 const sourceSelect=document.getElementById('customer-source');
@@ -22,9 +24,7 @@ renderList(customers);
 setupEvents();
 
 function applyRolePermissions(){
-  if(user.role==='staff'){
-    Array.from(form.elements).forEach(el=>el.disabled=true);
-    document.getElementById('form-actions').classList.add('hidden');
+  if(user.role==='staff' && staffHint){
     staffHint.classList.remove('hidden');
   }
 }
@@ -115,18 +115,26 @@ function collectFormData(){
 }
 
 function renderList(data){
+  const pendingIds=getPendingDeletionIds(COLLECTION);
   listContainer.innerHTML=data.map(item=>`<tr class="border-b last:border-b-0">
       <td class="px-3 py-2 font-semibold">${item.name}</td>
       <td class="px-3 py-2">${item.phone}</td>
       <td class="px-3 py-2">${formatDate(item.date)}</td>
       <td class="px-3 py-2">${item.sourceLabel}</td>
       <td class="px-3 py-2">${item.purchased?'<span class="badge badge-success">Đã mua</span>':'<span class="badge badge-warning">Chưa mua</span>'}</td>
-      <td class="px-3 py-2 text-right">
-        <button class="text-brand-blue font-semibold" data-action="view" data-id="${item.id}">Xem lịch sử</button>
+      <td class="px-3 py-2">
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          ${pendingIds.has(item.id)?'<span class="badge badge-warning">Chờ duyệt xóa</span>':''}
+          <button class="text-brand-blue font-semibold" data-action="view" data-id="${item.id}">Xem lịch sử</button>
+          <button class="text-rose-600 font-semibold" data-action="delete" data-id="${item.id}">${user.role==='admin'?'Xóa':'Xóa (gửi duyệt)'}</button>
+        </div>
       </td>
     </tr>`).join('');
   listContainer.querySelectorAll('button[data-action="view"]').forEach(btn=>{
     btn.addEventListener('click',()=>showCustomerDetail(btn.dataset.id));
+  });
+  listContainer.querySelectorAll('button[data-action="delete"]').forEach(btn=>{
+    btn.addEventListener('click',()=>handleDelete(btn.dataset.id));
   });
 }
 
@@ -145,6 +153,41 @@ function showCustomerDetail(id){
   modal.querySelector('[data-field="consulted"]').innerHTML=data.consultedList?.length?`<ul class="list-disc pl-5">${data.consultedList.map(item=>`<li>${item}</li>`).join('')}</ul>`:'-';
   modal.querySelector('[data-field="installment"]').innerText=data.installment||'-';
   modal.classList.remove('hidden');
+}
+
+async function handleDelete(id){
+  const record=customers.find(item=>item.id===id);
+  if(!record) return;
+  if(user.role==='admin'){
+    if(!await confirmAction('Bạn chắc chắn muốn xóa khách hàng này?')) return;
+    showLoading('Đang xóa khách hàng…');
+    setTimeout(()=>{
+      removeItem(COLLECTION,id);
+      resolvePendingByRecord(COLLECTION,id,'approved','Quản trị viên xóa trực tiếp trong danh sách khách hàng.');
+      customers=readCollection(COLLECTION);
+      hideLoading();
+      toast('Đã xóa khách hàng khỏi hệ thống.','success');
+      renderList(customers);
+    },300);
+    return;
+  }
+  const pendingSet=getPendingDeletionIds(COLLECTION);
+  if(pendingSet.has(id)){
+    toast('Đã có yêu cầu xóa đang chờ duyệt cho khách hàng này.','info');
+    return;
+  }
+  const reason=prompt('Nhập lý do xóa khách hàng (gửi quản trị viên duyệt):','');
+  if(!reason || !reason.trim()){
+    toast('Vui lòng ghi rõ lý do xóa để gửi duyệt.','error');
+    return;
+  }
+  try{
+    submitDeletionRequest(COLLECTION,record,user,reason.trim());
+    toast('Yêu cầu xóa đã được gửi đến quản trị viên.','success');
+    renderList(customers);
+  }catch(err){
+    toast(err.message||'Không thể gửi yêu cầu xóa.', 'error');
+  }
 }
 
 const closeModal=document.getElementById('close-detail');

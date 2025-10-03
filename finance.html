@@ -18,8 +18,8 @@
     <main class="flex-1 p-4 md:p-6 space-y-6">
       <section class="card p-5 space-y-4">
         <div class="section-title">Ghi nhận thu & chi</div>
-        <p class="text-sm text-slate-500">Quản lý tài chính minh bạch cho cửa hàng KLC Bến Lức.</p>
-        <p id="finance-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang ở chế độ nhân viên – chỉ xem báo cáo.</p>
+        <p class="text-sm text-slate-500">Quản lý tài chính minh bạch cho cửa hàng KLC Bến Lức. Nhân viên có thể nhập, chỉnh sửa và gửi yêu cầu xóa.</p>
+        <p id="finance-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang ở chế độ nhân viên: vui lòng ghi rõ lý do khi gửi yêu cầu xóa giao dịch.</p>
         <form id="finance-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <label class="flex flex-col">
             <span class="text-xs text-slate-500">Ngày giao dịch</span>
@@ -71,11 +71,13 @@
                   <th class="px-3 py-3 text-left">Loại</th>
                   <th class="px-3 py-3 text-right">Số tiền</th>
                   <th class="px-3 py-3 text-left">Ghi chú</th>
+                  <th class="px-3 py-3 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody id="finance-table-body" class="divide-y"></tbody>
             </table>
           </div>
+          <div class="sticky-actions text-sm text-slate-500">Nhấn “Xóa” để gửi yêu cầu duyệt hoặc xóa ngay nếu bạn là quản trị viên.</div>
         </div>
       </section>
 

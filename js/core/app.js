@@ -1,5 +1,5 @@
 import { requireAuth, logout } from './auth.js';
-import { getUsers, saveUsers } from './storage.js';
+import { getUsers, saveUsers, applyBrandingTheme } from './storage.js';
 
 const navItems=[
   { id:'dashboard', label:'Tổng quan', href:'dashboard.html', icon:'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0h6', roles:['admin','staff'] },
@@ -13,21 +13,22 @@ const navItems=[
 ];
 
 export function initApp(currentId){
+  const branding=applyBrandingTheme();
   const user=requireAuth();
-  buildSidebar(currentId,user);
+  buildSidebar(currentId,user,branding);
   buildTopbar(user);
-  buildMobileNav(currentId,user);
+  buildMobileNav(currentId,user,branding);
   return user;
 }
 
-function buildSidebar(currentId,user){
+function buildSidebar(currentId,user,branding){
   const sidebar=document.getElementById('app-sidebar');
   if(!sidebar) return;
   sidebar.innerHTML=`<div class="px-6 py-6 flex items-center gap-3 border-b border-white/10">
-      <img src="assets/img/logo.svg" class="h-10" alt="KLC"/>
+      <img src="${branding.logo||'assets/img/logo-klc.svg'}" class="h-10 rounded-lg bg-white/10 p-1" alt="${branding.title||'KLC'}"/>
       <div>
-        <div class="text-lg font-semibold">KLC Bến Lức</div>
-        <div class="text-sm text-slate-300">Nội bộ</div>
+        <div class="text-lg font-semibold">${branding.title||'KLC Bến Lức'}</div>
+        <div class="text-sm text-slate-300">${branding.tagline||'Nội bộ'}</div>
       </div>
     </div>
     <nav class="px-4 py-6 space-y-1">
@@ -54,9 +55,10 @@ function buildTopbar(user){
   document.getElementById('btn-logout').addEventListener('click',()=>logout());
 }
 
-function buildMobileNav(currentId,user){
+function buildMobileNav(currentId,user,branding){
   const nav=document.getElementById('app-mobile-nav');
   if(!nav) return;
+  nav.style.background=branding.accent||'var(--brand-blue)';
   nav.innerHTML=navItems.filter(item=>item.roles.includes(user.role)).map(item=>
     `<a class="mobile-nav-item ${item.id===currentId?'active':''}" href="${item.href}">${item.label}</a>`
   ).join('');
