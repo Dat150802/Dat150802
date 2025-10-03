@@ -1,0 +1,17 @@
+<svg width="512" height="320" viewBox="0 0 512 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="8" y="8" width="496" height="304" rx="36" fill="#0B7C82" stroke="#E8DCC6" stroke-width="16"/>
+  <g filter="url(#shadow)">
+    <path d="M180 214C206 158 268 124 356 128C326 110 272 102 224 128C182 148 150 190 142 236C154 218 170 206 190 198C236 178 300 182 352 206C324 178 286 162 248 160C230 160 210 164 180 178Z" fill="url(#swoosh)"/>
+    <path d="M400 108C354 88 292 98 250 134C286 120 332 122 368 144C398 162 418 194 424 232C430 198 420 148 400 108Z" fill="url(#swoosh)" opacity="0.88"/>
+  </g>
+  <text x="278" y="196" fill="#F8F5EC" font-size="112" font-weight="700" font-family="'Inter','Segoe UI',sans-serif" text-anchor="middle">KLC</text>
+  <defs>
+    <linearGradient id="swoosh" x1="164" y1="90" x2="420" y2="270" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDF6E3"/>
+      <stop offset="1" stop-color="#D8C5A9"/>
+    </linearGradient>
+    <filter id="shadow" x="112" y="70" width="344" height="210" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="rgba(15,23,42,0.25)"/>
+    </filter>
+  </defs>
+</svg>
