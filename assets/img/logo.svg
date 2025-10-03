@@ -1,0 +1,16 @@
+<svg width="240" height="140" viewBox="0 0 240 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="klc-bg" x1="20" y1="10" x2="220" y2="130" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B7C82"/>
+      <stop offset="1" stop-color="#0C4F66"/>
+    </linearGradient>
+    <linearGradient id="klc-swoosh" x1="52" y1="28" x2="164" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDF6E3"/>
+      <stop offset="1" stop-color="#D7C4A6"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="228" height="128" rx="20" fill="url(#klc-bg)" stroke="#E2E8F0" stroke-width="12"/>
+  <path d="M65 98C78 71 106 54 144 56C126 46 98 42 76 54C57 63 44 81 40 102C47 93 55 88 65 84C87 74 118 76 143 87C130 74 111 66 92 65C83 65 75 66 65 70Z" fill="url(#klc-swoosh)"/>
+  <path d="M178 42C155 32 124 38 104 56C122 48 145 49 162 60C176 68 186 82 190 99C193 83 188 60 178 42Z" fill="url(#klc-swoosh)" opacity="0.85"/>
+  <text x="128" y="92" fill="#F8FAFC" font-size="52" font-weight="700" font-family="'Inter','Segoe UI',sans-serif" text-anchor="middle">KLC</text>
+</svg>
