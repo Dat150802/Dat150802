@@ -34,6 +34,9 @@ Giao diện web nội bộ dành cho doanh nghiệp KLC Bến Lức. Toàn bộ 
 4. **Đồng bộ & sao lưu**
    - Dữ liệu lưu trên `localStorage`. Để đồng bộ nhiều thiết bị, quản trị viên xuất báo cáo CSV định kỳ và nhập thủ công khi cần. Có thể tích hợp thêm API hoặc cơ sở dữ liệu khác bằng cách thay thế các hàm đọc/ghi trong `app.js`.
 
+5. **Truy cập nhanh CheckList**
+   - Sử dụng đường dẫn `checklist.html` để vào thẳng module CheckList công việc (vẫn yêu cầu đăng nhập theo phân quyền).
+
 ## Cấu trúc thư mục
 
 ```
