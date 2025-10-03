@@ -1,5 +1,5 @@
 import { initApp, ensureAdminUserList, addUser } from './core/app.js';
-import { toast, confirmAction } from './core/ui.js';
+import { toast, confirmAction, showLoading, hideLoading } from './core/ui.js';
 import {
   getUsers,
   getLayoutConfig,
@@ -11,7 +11,12 @@ import {
   removeItem,
   removeUser,
   getStaff,
-  saveStaff
+  saveStaff,
+  getSyncConfig,
+  saveSyncConfig,
+  getSyncStatus,
+  testSyncConnection,
+  triggerSyncNow
 } from './core/storage.js';
 import { getDeletionRequests, resolveDeletionRequest } from './core/deletion.js';
 
@@ -22,6 +27,14 @@ bindUserActions();
 const isAdmin=user.role==='admin';
 const form=document.getElementById('user-form');
 const resetBtn=document.getElementById('user-reset');
+const syncForm=document.getElementById('sync-form');
+const syncSaveBtn=document.getElementById('sync-save');
+const syncTestBtn=document.getElementById('sync-test');
+const syncNowBtn=document.getElementById('sync-now');
+const syncStatusLabel=document.getElementById('sync-status-label');
+const syncLastPush=document.getElementById('sync-last-push');
+const syncLastPull=document.getElementById('sync-last-pull');
+const syncError=document.getElementById('sync-error');
 
 if(!isAdmin){
   document.getElementById('system-form-wrapper').classList.add('hidden');
@@ -33,11 +46,16 @@ if(!isAdmin){
   setupLayoutBuilder();
   renderDeletionRequests();
   setupStaffManager();
+  setupSyncManager();
 }
 
 window.addEventListener('klc:userlist-updated',()=>{
   ensureAdminUserList();
   bindUserActions();
+});
+
+window.addEventListener('klc:sync-updated',evt=>{
+  updateSyncStatus(evt?.detail||getSyncStatus());
 });
 
 function setupUserForm(){
@@ -242,6 +260,158 @@ function setupStaffManager(){
   });
 
   render();
+}
+
+function setupSyncManager(){
+  if(!syncForm) return;
+  const config=getSyncConfig();
+  syncForm.elements.enabled.checked=!!config.enabled;
+  syncForm.elements.endpoint.value=config.endpoint||'';
+  syncForm.elements.method.value=config.method||'PUT';
+  syncForm.elements.authScheme.value=config.authScheme||'Bearer';
+  syncForm.elements.apiKey.value=config.apiKey||'';
+  syncForm.elements.headers.value=headersToTextarea(config.headers);
+  syncForm.elements.pollInterval.value=Math.max(5, Math.round((config.pollInterval||15000)/1000));
+  toggleSyncInputs(config.enabled);
+
+  syncForm.elements.enabled.addEventListener('change',()=>{
+    toggleSyncInputs(syncForm.elements.enabled.checked);
+  });
+
+  syncSaveBtn?.addEventListener('click',handleSyncSave);
+  syncTestBtn?.addEventListener('click',handleSyncTest);
+  syncNowBtn?.addEventListener('click',handleSyncNow);
+
+  if(typeof fetch!=='function' && syncError){
+    syncError.textContent='Trình duyệt hiện tại không hỗ trợ Fetch API để đồng bộ đám mây.';
+    syncError.classList.remove('hidden');
+  }
+
+  updateSyncStatus(getSyncStatus());
+}
+
+function toggleSyncInputs(enabled){
+  if(!syncForm) return;
+  syncForm.querySelectorAll('[data-sync-field]').forEach(field=>{
+    if(field.name==='enabled') return;
+    field.disabled=!enabled;
+    field.classList.toggle('opacity-60',!enabled);
+  });
+}
+
+function headersToTextarea(headers){
+  return (headers||[]).map(item=>`${item.key}: ${item.value}`).join('\n');
+}
+
+function parseHeaderText(raw){
+  return raw
+    .split(/\r?\n/)
+    .map(line=>line.trim())
+    .filter(Boolean)
+    .map(line=>{
+      const [key,...rest]=line.split(':');
+      if(!key || !rest.length) return null;
+      return { key:key.trim(), value:rest.join(':').trim() };
+    })
+    .filter(Boolean);
+}
+
+function collectSyncConfig({ requireEnabled=false }={}){
+  if(!syncForm) return null;
+  const enabled=syncForm.elements.enabled.checked;
+  const endpoint=syncForm.elements.endpoint.value.trim();
+  if(requireEnabled && !enabled){
+    toast('Vui lòng bật đồng bộ trước khi thực hiện.','error');
+    return null;
+  }
+  if(enabled && !endpoint){
+    toast('Vui lòng nhập địa chỉ máy chủ khi bật đồng bộ.','error');
+    return null;
+  }
+  const pollSeconds=parseInt(syncForm.elements.pollInterval.value,10);
+  return {
+    enabled,
+    endpoint,
+    method:syncForm.elements.method.value||'PUT',
+    authScheme:syncForm.elements.authScheme.value||'Bearer',
+    apiKey:syncForm.elements.apiKey.value.trim(),
+    headers:parseHeaderText(syncForm.elements.headers.value),
+    pollInterval:Math.max(5, Number.isNaN(pollSeconds)?15:pollSeconds)*1000
+  };
+}
+
+async function handleSyncSave(evt){
+  evt.preventDefault();
+  const config=collectSyncConfig();
+  if(!config) return;
+  saveSyncConfig(config);
+  toast('Đã cập nhật cấu hình đồng bộ dữ liệu.','success');
+  updateSyncStatus(getSyncStatus());
+}
+
+async function handleSyncTest(evt){
+  evt.preventDefault();
+  const config=collectSyncConfig({ requireEnabled:true });
+  if(!config) return;
+  saveSyncConfig(config);
+  updateSyncStatus(getSyncStatus());
+  try{
+    showLoading('Đang kiểm tra kết nối…');
+    await testSyncConnection();
+    toast('Máy chủ đồng bộ phản hồi tốt.','success');
+  }catch(err){
+    toast(err.message||'Không thể kết nối máy chủ đồng bộ.','error');
+  }finally{
+    hideLoading();
+  }
+}
+
+async function handleSyncNow(evt){
+  evt.preventDefault();
+  const config=collectSyncConfig({ requireEnabled:true });
+  if(!config) return;
+  saveSyncConfig(config);
+  updateSyncStatus(getSyncStatus());
+  try{
+    showLoading('Đang đồng bộ dữ liệu với máy chủ…');
+    await triggerSyncNow('both');
+    toast('Đã đồng bộ dữ liệu thành công.','success');
+  }catch(err){
+    toast(err.message||'Không thể đồng bộ ngay.','error');
+  }finally{
+    hideLoading();
+  }
+}
+
+function updateSyncStatus(status){
+  if(!syncStatusLabel) return;
+  const enabled=status.enabled;
+  syncStatusLabel.textContent=enabled?'Đang bật':'Đang tắt';
+  syncStatusLabel.className=`badge ${enabled?'badge-info':'badge-warning'}`;
+  if(syncLastPush){
+    syncLastPush.textContent=formatDateTime(status.lastPush);
+  }
+  if(syncLastPull){
+    syncLastPull.textContent=formatDateTime(status.lastPull);
+  }
+  if(syncError){
+    syncError.textContent=status.lastError||'';
+    syncError.classList.toggle('hidden',!status.lastError);
+  }
+  [syncTestBtn, syncNowBtn].forEach(btn=>{
+    if(!btn) return;
+    btn.disabled=!enabled;
+    btn.classList.toggle('opacity-50',!enabled);
+    btn.classList.toggle('cursor-not-allowed',!enabled);
+    btn.classList.toggle('pointer-events-none',!enabled);
+  });
+}
+
+function formatDateTime(value){
+  if(!value) return 'Chưa có';
+  const date=new Date(value);
+  if(Number.isNaN(date.getTime())) return 'Chưa có';
+  return date.toLocaleString('vi-VN');
 }
 
 function setupLayoutBuilder(){

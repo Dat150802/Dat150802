@@ -22,6 +22,31 @@ const DEFAULT_BRANDING={
 
 const DEFAULT_STAFF=['Đạt','Huỳnh'];
 
+const SYNC_CONFIG_KEY='klc_sync_config_v1';
+const DEFAULT_SYNC_CONFIG={
+  enabled:false,
+  endpoint:'',
+  method:'PUT',
+  apiKey:'',
+  authScheme:'Bearer',
+  headers:[],
+  pollInterval:15000
+};
+
+let syncConfig=null;
+let syncUploadTimer=null;
+let syncPullTimer=null;
+let syncPushInFlight=false;
+let syncPullInFlight=false;
+let syncPendingUpload=false;
+let syncServiceStarted=false;
+const syncStatus={
+  enabled:false,
+  lastPush:0,
+  lastPull:0,
+  lastError:''
+};
+
 const DEFAULT_LAYOUT=[
   { id:'block_summary', type:'summary', title:'Chỉ số kinh doanh chủ đạo' },
   {
@@ -94,6 +119,80 @@ function clone(value){
   return value?JSON.parse(JSON.stringify(value)):value;
 }
 
+function normalizeHeaders(headers){
+  if(!headers) return [];
+  if(typeof headers==='string'){
+    return headers.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{
+      const [key,...rest]=line.split(':');
+      if(!key || !rest.length) return null;
+      return { key:key.trim(), value:rest.join(':').trim() };
+    }).filter(Boolean);
+  }
+  if(Array.isArray(headers)){
+    return headers
+      .map(item=>{
+        if(!item) return null;
+        const key=(item.key||item.name||'').trim();
+        const value=(item.value||item.headerValue||'').trim();
+        if(!key || !value) return null;
+        return { key, value };
+      })
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function cloneHeaders(headers){
+  return normalizeHeaders(headers).map(item=>({ ...item }));
+}
+
+function loadSyncConfig(){
+  if(syncConfig) return syncConfig;
+  try{
+    const raw=localStorage.getItem(SYNC_CONFIG_KEY);
+    if(raw){
+      const parsed=JSON.parse(raw);
+      syncConfig={
+        ...DEFAULT_SYNC_CONFIG,
+        ...parsed,
+        headers:normalizeHeaders(parsed.headers)
+      };
+    }else{
+      syncConfig={ ...DEFAULT_SYNC_CONFIG };
+    }
+  }catch(err){
+    syncConfig={ ...DEFAULT_SYNC_CONFIG };
+  }
+  updateSyncEnabledFlag();
+  return syncConfig;
+}
+
+function getInternalSyncConfig(){
+  return syncConfig?syncConfig:loadSyncConfig();
+}
+
+function saveSyncConfigToStorage(){
+  if(typeof localStorage==='undefined') return;
+  try{
+    const payload={ ...getInternalSyncConfig(), headers:cloneHeaders(syncConfig.headers) };
+    localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(payload));
+  }catch(err){
+    console.warn('Không thể lưu cấu hình đồng bộ', err);
+  }
+}
+
+function updateSyncEnabledFlag(){
+  const config=syncConfig||DEFAULT_SYNC_CONFIG;
+  syncStatus.enabled=!!(config.enabled && config.endpoint && typeof fetch==='function');
+  emitSyncStatus();
+}
+
+function emitSyncStatus(){
+  if(typeof window!=='undefined'){
+    window.dispatchEvent(new CustomEvent('klc:sync-updated',{ detail:getSyncStatus() }));
+  }
+}
+
 function ensureWatchers(){
   if(watchersReady || typeof window==='undefined') return;
   watchersReady=true;
@@ -136,6 +235,7 @@ function loadState(){
     try{
       stateCache=JSON.parse(raw);
       lastVersion=Number(stateCache?.version)||Number(localStorage.getItem(VERSION_KEY)||'0')||0;
+      startSyncService();
       return stateCache;
     }catch(err){
       console.error('Invalid state payload, rebuilding', err);
@@ -143,22 +243,221 @@ function loadState(){
   }
   const state=buildDefaultState();
   migrateLegacyData(state);
-  persistState(state,{silent:true});
+  persistState(state,{silent:true, skipSync:true});
   stateCache=state;
   lastVersion=Number(state.version)||Date.now();
+  startSyncService();
   return state;
 }
 
-function persistState(state,{silent=false}={}){
-  state.version=Date.now();
+function persistState(state,{silent=false, skipSync=false, preserveVersion=false}={}){
+  if(!preserveVersion){
+    state.version=Date.now();
+  }else{
+    state.version=Number(state.version)||Date.now();
+  }
   localStorage.setItem(DB_KEY, JSON.stringify(state));
   localStorage.setItem(VERSION_KEY, String(state.version));
   stateCache=state;
   lastVersion=state.version;
+  if(!skipSync){
+    scheduleSyncUpload();
+  }
   if(!silent){
     notifyAll();
     broadcastSync(state.version);
   }
+}
+
+function scheduleSyncUpload(delay=600){
+  const config=getInternalSyncConfig();
+  if(!config.enabled || !config.endpoint || typeof fetch!=='function') return;
+  if(syncUploadTimer){
+    return;
+  }
+  syncUploadTimer=setTimeout(()=>{
+    syncUploadTimer=null;
+    pushToRemote().catch(()=>{});
+  },Math.max(0,delay));
+}
+
+function queueRemotePull(initial=false,delay=0){
+  if(syncPullTimer){
+    clearTimeout(syncPullTimer);
+  }
+  syncPullTimer=setTimeout(async()=>{
+    await pullFromRemote({ initial });
+    const cfg=getInternalSyncConfig();
+    if(cfg.enabled && cfg.endpoint && typeof fetch==='function'){
+      queueRemotePull(false, cfg.pollInterval||15000);
+    }
+  },Math.max(0,delay));
+}
+
+function restartSyncTimers(){
+  if(syncPullTimer){
+    clearTimeout(syncPullTimer);
+    syncPullTimer=null;
+  }
+  if(syncUploadTimer){
+    clearTimeout(syncUploadTimer);
+    syncUploadTimer=null;
+  }
+  syncPendingUpload=false;
+  const config=getInternalSyncConfig();
+  if(!config.enabled || !config.endpoint || typeof fetch!=='function'){
+    syncServiceStarted=false;
+    return;
+  }
+  syncServiceStarted=true;
+  queueRemotePull(true,200);
+}
+
+async function pushToRemote({ manual=false }={}){
+  const config=getInternalSyncConfig();
+  if(!config.enabled || !config.endpoint || typeof fetch!=='function') return false;
+  if(syncPushInFlight){
+    if(manual){
+      throw new Error('Đang có phiên đồng bộ khác đang xử lý.');
+    }
+    syncPendingUpload=true;
+    return false;
+  }
+  syncPushInFlight=true;
+  syncPendingUpload=false;
+  syncStatus.lastError='';
+  emitSyncStatus();
+  try{
+    const payload=clone(loadState());
+    const response=await fetch(config.endpoint,{
+      method:config.method||'PUT',
+      headers:buildSyncHeaders(config,true),
+      body:JSON.stringify(payload),
+      cache:'no-store'
+    });
+    if(!response.ok){
+      throw new Error(`Máy chủ trả về mã ${response.status}`);
+    }
+    syncStatus.lastPush=Date.now();
+    emitSyncStatus();
+    return true;
+  }catch(err){
+    syncStatus.lastError=err.message||'Không thể đẩy dữ liệu.';
+    emitSyncStatus();
+    if(manual) throw err;
+    console.warn('Không thể đồng bộ lên máy chủ', err);
+    return false;
+  }finally{
+    syncPushInFlight=false;
+    if(syncPendingUpload){
+      syncPendingUpload=false;
+      scheduleSyncUpload(800);
+    }
+  }
+}
+
+async function pullFromRemote({ initial=false, manual=false }={}){
+  const config=getInternalSyncConfig();
+  if(!config.enabled || !config.endpoint || typeof fetch!=='function') return false;
+  if(syncPullInFlight){
+    if(manual){
+      throw new Error('Đang tải dữ liệu mới từ máy chủ.');
+    }
+    return false;
+  }
+  syncPullInFlight=true;
+  syncStatus.lastError='';
+  emitSyncStatus();
+  try{
+    const response=await fetch(config.endpoint,{
+      method:'GET',
+      headers:buildSyncHeaders(config,false),
+      cache:'no-store'
+    });
+    if(response.status===404){
+      if(initial){
+        scheduleSyncUpload(300);
+      }
+      return false;
+    }
+    if(!response.ok){
+      throw new Error(`Máy chủ trả về mã ${response.status}`);
+    }
+    const text=await response.text();
+    if(!text){
+      if(initial){
+        scheduleSyncUpload(300);
+      }
+      return false;
+    }
+    const remote=JSON.parse(text);
+    if(remote && typeof remote==='object'){
+      const normalized=normalizeRemoteState(remote);
+      const remoteVersion=Number(normalized.version)||0;
+      if(!lastVersion || remoteVersion>lastVersion){
+        persistState(normalized,{ silent:true, skipSync:true, preserveVersion:true });
+        stateCache=normalized;
+        lastVersion=remoteVersion;
+        notifyAll();
+        broadcastSync(remoteVersion);
+      }
+      syncStatus.lastPull=Date.now();
+      emitSyncStatus();
+      return true;
+    }
+  }catch(err){
+    syncStatus.lastError=err.message||'Không thể tải dữ liệu.';
+    emitSyncStatus();
+    if(manual) throw err;
+    console.warn('Không thể đồng bộ từ máy chủ', err);
+  }finally{
+    syncPullInFlight=false;
+  }
+  return false;
+}
+
+function normalizeRemoteState(remote){
+  const base=buildDefaultState();
+  const normalized={
+    ...base,
+    ...remote,
+    collections:{
+      ...base.collections,
+      ...(remote.collections||{})
+    },
+    branding:{
+      ...base.branding,
+      ...(remote.branding||{})
+    }
+  };
+  if(!Array.isArray(normalized.users)) normalized.users=base.users;
+  if(!Array.isArray(normalized.staff)) normalized.staff=base.staff;
+  return normalized;
+}
+
+function buildSyncHeaders(config,isWrite){
+  const headers={};
+  if(isWrite){
+    headers['Content-Type']='application/json';
+  }
+  const scheme=(config.authScheme||'Bearer').trim();
+  if(config.apiKey){
+    if(scheme==='Api-Key'){
+      headers['X-API-Key']=config.apiKey;
+    }else if(scheme && scheme!=='None'){
+      headers['Authorization']=`${scheme} ${config.apiKey}`.trim();
+    }
+  }
+  normalizeHeaders(config.headers).forEach(item=>{
+    headers[item.key]=item.value;
+  });
+  return headers;
+}
+
+function startSyncService(){
+  if(syncServiceStarted) return;
+  syncServiceStarted=true;
+  restartSyncTimers();
 }
 
 function migrateLegacyData(target){
@@ -348,6 +647,65 @@ export function saveStaff(list){
   if(typeof window!=='undefined'){
     window.dispatchEvent(new CustomEvent('klc:staff-updated',{ detail:{ staff:getStaff() }}));
   }
+}
+
+export function getSyncConfig(){
+  const config=getInternalSyncConfig();
+  return { ...config, headers:cloneHeaders(config.headers) };
+}
+
+export function saveSyncConfig(config){
+  syncConfig={
+    ...DEFAULT_SYNC_CONFIG,
+    ...config,
+    headers:normalizeHeaders(config.headers)
+  };
+  saveSyncConfigToStorage();
+  updateSyncEnabledFlag();
+  restartSyncTimers();
+  return getSyncConfig();
+}
+
+export function getSyncStatus(){
+  return { ...syncStatus };
+}
+
+export async function testSyncConnection(){
+  const config=getInternalSyncConfig();
+  if(!config.enabled || !config.endpoint){
+    throw new Error('Chưa bật đồng bộ hoặc chưa nhập địa chỉ máy chủ.');
+  }
+  if(typeof fetch!=='function'){
+    throw new Error('Trình duyệt hiện tại không hỗ trợ đồng bộ từ xa.');
+  }
+  try{
+    const response=await fetch(config.endpoint,{
+      method:'GET',
+      headers:buildSyncHeaders(config,false),
+      cache:'no-store'
+    });
+    if(response.status===404) return true;
+    if(!response.ok){
+      throw new Error(`Máy chủ trả về mã ${response.status}`);
+    }
+    return true;
+  }catch(err){
+    throw new Error(err.message||'Không thể kết nối máy chủ đồng bộ.');
+  }
+}
+
+export async function triggerSyncNow(mode='both'){
+  const config=getInternalSyncConfig();
+  if(!config.enabled || !config.endpoint){
+    throw new Error('Đồng bộ chưa được bật.');
+  }
+  if(mode==='pull' || mode==='both'){
+    await pullFromRemote({ manual:true });
+  }
+  if(mode==='push' || mode==='both'){
+    await pushToRemote({ manual:true });
+  }
+  return getSyncStatus();
 }
 
 export function getDefaultLayout(){

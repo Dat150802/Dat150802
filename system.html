@@ -78,6 +78,62 @@
       </section>
 
       <section class="card p-5 space-y-4" data-admin-only>
+        <div class="section-title">Đồng bộ dữ liệu đa thiết bị</div>
+        <p class="text-sm text-slate-500">Kết nối với một máy chủ lưu trữ JSON (Google Apps Script, dịch vụ REST riêng, v.v.) để các thiết bị cùng cập nhật chung một nguồn dữ liệu.</p>
+        <form id="sync-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="inline-flex items-center gap-3 md:col-span-2 text-sm font-semibold text-slate-600">
+            <input type="checkbox" name="enabled" class="h-5 w-5" data-sync-field>
+            <span>Bật đồng bộ đám mây</span>
+          </label>
+          <label class="flex flex-col md:col-span-2">
+            <span class="text-xs text-slate-500">Địa chỉ máy chủ (GET/PUT JSON)</span>
+            <input type="url" name="endpoint" class="input-brand" placeholder="https://example.com/klc.json" data-sync-field>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Phương thức ghi dữ liệu</span>
+            <select name="method" class="input-brand" data-sync-field>
+              <option value="PUT">PUT</option>
+              <option value="POST">POST</option>
+              <option value="PATCH">PATCH</option>
+            </select>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Chu kỳ kiểm tra (giây)</span>
+            <input type="number" name="pollInterval" class="input-brand" min="5" step="1" data-sync-field>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Kiểu xác thực</span>
+            <select name="authScheme" class="input-brand" data-sync-field>
+              <option value="Bearer">Bearer token</option>
+              <option value="Basic">Basic</option>
+              <option value="Api-Key">API Key</option>
+              <option value="None">Không dùng (tự cấu hình)</option>
+            </select>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Mã truy cập / API key (tuỳ chọn)</span>
+            <input type="text" name="apiKey" class="input-brand" placeholder="Nhập token" data-sync-field>
+          </label>
+          <label class="flex flex-col md:col-span-2">
+            <span class="text-xs text-slate-500">Header bổ sung (mỗi dòng dạng Tên: Giá trị)</span>
+            <textarea name="headers" class="input-brand" rows="3" placeholder="X-Custom-Header: Value" data-sync-field></textarea>
+          </label>
+        </form>
+        <div class="flex flex-wrap items-center gap-3">
+          <button id="sync-save" type="button" class="btn-brand px-6 py-2.5">Lưu cấu hình</button>
+          <button id="sync-test" type="button" class="px-6 py-2.5 rounded-xl border border-brand-blue text-brand-blue">Kiểm tra kết nối</button>
+          <button id="sync-now" type="button" class="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-600">Đồng bộ ngay</button>
+        </div>
+        <div class="bg-slate-100 border border-slate-200 rounded-xl p-4 space-y-2 text-sm">
+          <div>Trạng thái: <span id="sync-status-label" class="badge badge-warning">Đang tắt</span></div>
+          <div>Lần đẩy dữ liệu gần nhất: <span id="sync-last-push">Chưa có</span></div>
+          <div>Lần tải dữ liệu gần nhất: <span id="sync-last-pull">Chưa có</span></div>
+          <div id="sync-error" class="text-rose-600 hidden">Không thể kết nối máy chủ.</div>
+          <p class="text-xs text-slate-500 pt-2 border-t border-dashed">Máy chủ cần hỗ trợ GET để đọc và PUT/POST/PATCH để lưu toàn bộ nội dung JSON của hệ thống.</p>
+        </div>
+      </section>
+
+      <section class="card p-5 space-y-4" data-admin-only>
         <div class="section-title">Nhận diện thương hiệu & logo</div>
         <p class="text-sm text-slate-500">Cập nhật tiêu đề, khẩu hiệu, logo chuẩn thương hiệu KLC và màu sắc chủ đạo cho toàn bộ cổng nội bộ.</p>
         <form id="branding-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
