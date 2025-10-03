@@ -5,6 +5,132 @@ const SESSION_KEY='klc_session';
 const SESSION_EXP_KEY='klc_session_exp';
 const SESSION_DURATION=1000*60*60*24*30; // 30 days
 
+const nativeLocalStorage=(typeof window!=='undefined' && window.localStorage)?window.localStorage:null;
+const nativeSessionStorage=(typeof window!=='undefined' && window.sessionStorage)?window.sessionStorage:null;
+const memoryLocal=new Map();
+const memorySession=new Map();
+
+function cookieSet(key,value,{ days=null }={}){
+  if(typeof document==='undefined') return false;
+  try{
+    let cookie=`${encodeURIComponent(key)}=${encodeURIComponent(value||'')}; path=/`;
+    if(days!==null){
+      const expires=new Date(Date.now()+days*24*60*60*1000);
+      cookie+=`; expires=${expires.toUTCString()}`;
+    }
+    document.cookie=cookie;
+    return true;
+  }catch(err){
+    console.warn('Không thể lưu cookie', err);
+    return false;
+  }
+}
+
+function cookieGet(key){
+  if(typeof document==='undefined') return null;
+  const target=encodeURIComponent(key);
+  const parts=document.cookie?document.cookie.split('; '):[];
+  for(const part of parts){
+    const [name,...rest]=part.split('=');
+    if(name===target){
+      return decodeURIComponent(rest.join('='));
+    }
+  }
+  return null;
+}
+
+function cookieRemove(key){
+  if(typeof document==='undefined') return;
+  document.cookie=`${encodeURIComponent(key)}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+}
+
+function localSet(key,value){
+  if(nativeLocalStorage){
+    try{
+      nativeLocalStorage.setItem(key,value);
+      memoryLocal.delete(key);
+      return true;
+    }catch(err){
+      console.warn('Không thể ghi localStorage', err);
+    }
+  }
+  const cookiePersisted=cookieSet(key,value,{ days:120 });
+  if(cookiePersisted){
+    return true;
+  }
+  memoryLocal.set(key,value);
+  return false;
+}
+
+function localGet(key){
+  if(nativeLocalStorage){
+    try{
+      const value=nativeLocalStorage.getItem(key);
+      if(value!==null && value!==undefined) return value;
+    }catch(err){
+      console.warn('Không thể đọc localStorage', err);
+    }
+  }
+  const cookieValue=cookieGet(key);
+  if(cookieValue!==null && cookieValue!==undefined) return cookieValue;
+  return memoryLocal.has(key)?memoryLocal.get(key):null;
+}
+
+function localRemove(key){
+  if(nativeLocalStorage){
+    try{
+      nativeLocalStorage.removeItem(key);
+    }catch(err){
+      console.warn('Không thể xóa localStorage', err);
+    }
+  }
+  cookieRemove(key);
+  memoryLocal.delete(key);
+}
+
+function sessionSet(key,value){
+  if(nativeSessionStorage){
+    try{
+      nativeSessionStorage.setItem(key,value);
+      memorySession.delete(key);
+      return true;
+    }catch(err){
+      console.warn('Không thể ghi sessionStorage', err);
+    }
+  }
+  if(cookieSet(key,value)){
+    return true;
+  }
+  memorySession.set(key,value);
+  return false;
+}
+
+function sessionGet(key){
+  if(nativeSessionStorage){
+    try{
+      const value=nativeSessionStorage.getItem(key);
+      if(value!==null && value!==undefined) return value;
+    }catch(err){
+      console.warn('Không thể đọc sessionStorage', err);
+    }
+  }
+  const cookieValue=cookieGet(key);
+  if(cookieValue!==null && cookieValue!==undefined) return cookieValue;
+  return memorySession.has(key)?memorySession.get(key):null;
+}
+
+function sessionRemove(key){
+  if(nativeSessionStorage){
+    try{
+      nativeSessionStorage.removeItem(key);
+    }catch(err){
+      console.warn('Không thể xóa sessionStorage', err);
+    }
+  }
+  cookieRemove(key);
+  memorySession.delete(key);
+}
+
 export function login(username,password,remember){
   return new Promise((resolve,reject)=>{
     setTimeout(()=>{
@@ -15,13 +141,19 @@ export function login(username,password,remember){
         return;
       }
       const payload={ username:user.username, role:user.role, name:user.name, loginAt:Date.now() };
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+      const sessionPersisted=sessionSet(SESSION_KEY, JSON.stringify(payload));
+      if(!sessionPersisted){
+        toast('Trình duyệt đang chặn lưu phiên làm việc, bạn có thể cần duy trì trang hiện tại để tránh bị đăng xuất.','warning');
+      }
       if(remember){
-        localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
-        localStorage.setItem(SESSION_EXP_KEY, String(Date.now()+SESSION_DURATION));
+        const persisted=localSet(SESSION_KEY, JSON.stringify(payload));
+        localSet(SESSION_EXP_KEY, String(Date.now()+SESSION_DURATION));
+        if(remember && !persisted){
+          toast('Thiết bị hiện không hỗ trợ lưu đăng nhập lâu dài, phiên sẽ chỉ hoạt động trong trình duyệt hiện tại.','warning');
+        }
       }else{
-        localStorage.removeItem(SESSION_KEY);
-        localStorage.removeItem(SESSION_EXP_KEY);
+        localRemove(SESSION_KEY);
+        localRemove(SESSION_EXP_KEY);
       }
       resolve(payload);
     },400);
@@ -29,17 +161,17 @@ export function login(username,password,remember){
 }
 
 export function getCurrentUser(){
-  const session=sessionStorage.getItem(SESSION_KEY);
+  const session=sessionGet(SESSION_KEY);
   if(session){
     return JSON.parse(session);
   }
-  const exp=localStorage.getItem(SESSION_EXP_KEY);
+  const exp=localGet(SESSION_EXP_KEY);
   if(exp && Date.now()>Number(exp)){
-    localStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem(SESSION_EXP_KEY);
+    localRemove(SESSION_KEY);
+    localRemove(SESSION_EXP_KEY);
     return null;
   }
-  const stored=localStorage.getItem(SESSION_KEY);
+  const stored=localGet(SESSION_KEY);
   return stored?JSON.parse(stored):null;
 }
 
@@ -54,9 +186,9 @@ export function requireAuth(){
 }
 
 export function logout(){
-  sessionStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(SESSION_EXP_KEY);
+  sessionRemove(SESSION_KEY);
+  localRemove(SESSION_KEY);
+  localRemove(SESSION_EXP_KEY);
   toast('Bạn đã đăng xuất khỏi hệ thống.','info');
   setTimeout(()=>location.href='index.html',300);
 }

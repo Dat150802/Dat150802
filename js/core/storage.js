@@ -13,6 +13,58 @@ const LEGACY_KEYS={
 const LEGACY_USERS_KEY='klc_users';
 const LEGACY_BRANDING_KEY='klc_branding';
 
+const nativeLocalStorage=(typeof window!=='undefined' && window.localStorage)?window.localStorage:null;
+const memoryStorage=new Map();
+const hasLocalStorage=(()=>{
+  if(!nativeLocalStorage) return false;
+  try{
+    const testKey='__klc_storage_test__';
+    nativeLocalStorage.setItem(testKey,'1');
+    nativeLocalStorage.removeItem(testKey);
+    return true;
+  }catch(err){
+    console.warn('LocalStorage không khả dụng, sẽ sử dụng bộ nhớ tạm thời.', err);
+    return false;
+  }
+})();
+
+function storageGet(key){
+  if(hasLocalStorage){
+    try{
+      const value=nativeLocalStorage.getItem(key);
+      if(value!==null && value!==undefined) return value;
+    }catch(err){
+      console.warn('Không thể đọc localStorage', err);
+    }
+  }
+  return memoryStorage.has(key)?memoryStorage.get(key):null;
+}
+
+function storageSet(key,value){
+  if(hasLocalStorage){
+    try{
+      nativeLocalStorage.setItem(key,value);
+      memoryStorage.delete(key);
+      return true;
+    }catch(err){
+      console.warn('Không thể ghi localStorage', err);
+    }
+  }
+  memoryStorage.set(key,value);
+  return false;
+}
+
+function storageRemove(key){
+  if(hasLocalStorage){
+    try{
+      nativeLocalStorage.removeItem(key);
+    }catch(err){
+      console.warn('Không thể xóa localStorage', err);
+    }
+  }
+  memoryStorage.delete(key);
+}
+
 const DEFAULT_BRANDING={
   title:'KLC Bến Lức',
   tagline:'Cổng nội bộ',
@@ -149,7 +201,7 @@ function cloneHeaders(headers){
 function loadSyncConfig(){
   if(syncConfig) return syncConfig;
   try{
-    const raw=localStorage.getItem(SYNC_CONFIG_KEY);
+    const raw=storageGet(SYNC_CONFIG_KEY);
     if(raw){
       const parsed=JSON.parse(raw);
       syncConfig={
@@ -172,10 +224,9 @@ function getInternalSyncConfig(){
 }
 
 function saveSyncConfigToStorage(){
-  if(typeof localStorage==='undefined') return;
   try{
     const payload={ ...getInternalSyncConfig(), headers:cloneHeaders(syncConfig.headers) };
-    localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(payload));
+    storageSet(SYNC_CONFIG_KEY, JSON.stringify(payload));
   }catch(err){
     console.warn('Không thể lưu cấu hình đồng bộ', err);
   }
@@ -197,7 +248,7 @@ function ensureWatchers(){
   if(watchersReady || typeof window==='undefined') return;
   watchersReady=true;
   try{
-    lastVersion=Number(localStorage.getItem(VERSION_KEY)||'0')||0;
+    lastVersion=Number(storageGet(VERSION_KEY)||'0')||0;
   }catch(err){
     lastVersion=0;
   }
@@ -215,7 +266,7 @@ function ensureWatchers(){
   });
   const poll=()=>{
     try{
-      const stored=Number(localStorage.getItem(VERSION_KEY)||'0');
+      const stored=Number(storageGet(VERSION_KEY)||'0');
       if(stored && stored!==lastVersion){
         handleExternalChange(stored);
       }
@@ -230,11 +281,11 @@ function ensureWatchers(){
 function loadState(){
   if(stateCache) return stateCache;
   ensureWatchers();
-  const raw=localStorage.getItem(DB_KEY);
+  const raw=storageGet(DB_KEY);
   if(raw){
     try{
       stateCache=JSON.parse(raw);
-      lastVersion=Number(stateCache?.version)||Number(localStorage.getItem(VERSION_KEY)||'0')||0;
+      lastVersion=Number(stateCache?.version)||Number(storageGet(VERSION_KEY)||'0')||0;
       startSyncService();
       return stateCache;
     }catch(err){
@@ -256,8 +307,8 @@ function persistState(state,{silent=false, skipSync=false, preserveVersion=false
   }else{
     state.version=Number(state.version)||Date.now();
   }
-  localStorage.setItem(DB_KEY, JSON.stringify(state));
-  localStorage.setItem(VERSION_KEY, String(state.version));
+  storageSet(DB_KEY, JSON.stringify(state));
+  storageSet(VERSION_KEY, String(state.version));
   stateCache=state;
   lastVersion=state.version;
   if(!skipSync){
@@ -463,7 +514,7 @@ function startSyncService(){
 function migrateLegacyData(target){
   let migrated=false;
   Object.entries(LEGACY_KEYS).forEach(([name,key])=>{
-    const raw=localStorage.getItem(key);
+    const raw=storageGet(key);
     if(raw){
       try{
         const data=JSON.parse(raw);
@@ -479,7 +530,7 @@ function migrateLegacyData(target){
       }
     }
   });
-  const rawUsers=localStorage.getItem(LEGACY_USERS_KEY);
+  const rawUsers=storageGet(LEGACY_USERS_KEY);
   if(rawUsers){
     try{
       const users=JSON.parse(rawUsers);
@@ -491,7 +542,7 @@ function migrateLegacyData(target){
       console.warn('Không thể migrate người dùng', err);
     }
   }
-  const rawBranding=localStorage.getItem(LEGACY_BRANDING_KEY);
+  const rawBranding=storageGet(LEGACY_BRANDING_KEY);
   if(rawBranding){
     try{
       const branding=JSON.parse(rawBranding);
@@ -502,9 +553,9 @@ function migrateLegacyData(target){
     }
   }
   if(migrated){
-    Object.values(LEGACY_KEYS).forEach(key=>localStorage.removeItem(key));
-    localStorage.removeItem(LEGACY_USERS_KEY);
-    localStorage.removeItem(LEGACY_BRANDING_KEY);
+    Object.values(LEGACY_KEYS).forEach(key=>storageRemove(key));
+    storageRemove(LEGACY_USERS_KEY);
+    storageRemove(LEGACY_BRANDING_KEY);
   }
 }
 
@@ -520,7 +571,7 @@ function handleExternalChange(versionCandidate){
   let numeric=Number(versionCandidate||0);
   if(!numeric){
     try{
-      numeric=Number(localStorage.getItem(VERSION_KEY)||'0');
+      numeric=Number(storageGet(VERSION_KEY)||'0');
     }catch(err){
       numeric=0;
     }
