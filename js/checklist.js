@@ -1,11 +1,26 @@
 import { initApp } from './core/app.js';
+<<<<<<< codex/build-internal-website-for-klc-ben-luc-qmk601
+import {
+  appendItem,
+  readCollection,
+  generateId,
+  removeItem,
+  subscribeCollection,
+  getStaff
+} from './core/storage.js';
+=======
 import { appendItem, readCollection, generateId, removeItem } from './core/storage.js';
+>>>>>>> codex/build-internal-website-for-klc-ben-luc-b5jncf
 import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
 import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
 
 const user=initApp('checklist');
 let checklists=readCollection('checklists');
+<<<<<<< codex/build-internal-website-for-klc-ben-luc-qmk601
+let staffList=getStaff();
+=======
+>>>>>>> codex/build-internal-website-for-klc-ben-luc-b5jncf
 const COLLECTION='checklists';
 
 const form=document.getElementById('checklist-form');
@@ -14,12 +29,38 @@ const shiftSelect=document.getElementById('checklist-shift');
 const slotContainer=document.getElementById('task-slots');
 const tableBody=document.getElementById('checklist-table-body');
 const searchInput=document.getElementById('checklist-search');
+<<<<<<< codex/build-internal-website-for-klc-ben-luc-qmk601
+const modeSelect=document.getElementById('checklist-mode');
+const schedulePanel=document.getElementById('schedule-panel');
+const reportPanel=document.getElementById('report-panel');
+const reportSummary=document.getElementById('checklist-report-summary');
+const reportBody=document.getElementById('checklist-report-body');
+
+applyRolePermissions();
+renderTable(checklists);
+renderReport(checklists);
+setupEvents();
+populateStaffOptions();
+updateSlots();
+
+subscribeCollection('checklists',data=>{
+  checklists=data;
+  applySearchFilter();
+});
+
+window.addEventListener('klc:staff-updated',evt=>{
+  staffList=evt.detail.staff;
+  populateStaffOptions();
+});
+
+=======
 
 applyRolePermissions();
 renderTable(checklists);
 setupEvents();
 updateSlots();
 
+>>>>>>> codex/build-internal-website-for-klc-ben-luc-b5jncf
 function applyRolePermissions(){
   if(user.role==='staff'){
     staffHint?.classList.remove('hidden');
@@ -37,6 +78,10 @@ function setupEvents(){
       appendItem('checklists',payload);
       checklists=readCollection('checklists');
       renderTable(checklists);
+<<<<<<< codex/build-internal-website-for-klc-ben-luc-qmk601
+      renderReport(checklists);
+=======
+>>>>>>> codex/build-internal-website-for-klc-ben-luc-b5jncf
       form.reset();
       updateSlots();
       hideLoading();
@@ -52,6 +97,37 @@ function setupEvents(){
     });
   }
   if(searchInput){
+<<<<<<< codex/build-internal-website-for-klc-ben-luc-qmk601
+    bindSearch(searchInput,()=>applySearchFilter());
+  }
+  if(modeSelect){
+    modeSelect.addEventListener('change',()=>toggleMode(modeSelect.value));
+    toggleMode(modeSelect.value);
+  }
+  reportBody?.addEventListener('click',evt=>{
+    const target=evt.target.closest('button[data-report]');
+    if(!target) return;
+    const action=target.dataset.report;
+    const id=target.dataset.id;
+    if(action==='view'){ showDetail(id); return; }
+    if(action==='assign'){ assignChecklist(id); }
+  });
+}
+
+function applySearchFilter(){
+  const keyword=searchInput?.value.trim().toLowerCase();
+  if(keyword){
+    const filtered=checklists.filter(item=>
+      item.staff.toLowerCase().includes(keyword)||
+      item.shiftLabel.toLowerCase().includes(keyword)||
+      item.date.includes(keyword)
+    );
+    renderTable(filtered);
+    renderReport(filtered);
+  }else{
+    renderTable(checklists);
+    renderReport(checklists);
+=======
     bindSearch(searchInput,value=>{
       const keyword=value.toLowerCase();
       const filtered=checklists.filter(item=>
@@ -61,6 +137,7 @@ function setupEvents(){
       );
       renderTable(filtered);
     });
+>>>>>>> codex/build-internal-website-for-klc-ben-luc-b5jncf
   }
 }
 
@@ -80,7 +157,12 @@ function collectFormData(){
     summary:formData.get('summary'),
     pendingReason:formData.get('pendingReason'),
     schedule:formData.get('schedule'),
+<<<<<<< codex/build-internal-website-for-klc-ben-luc-qmk601
+    managerNote:formData.get('managerNote'),
+    resultStatus:formData.get('resultStatus')||'done'
+=======
     managerNote:formData.get('managerNote')
+>>>>>>> codex/build-internal-website-for-klc-ben-luc-b5jncf
   };
 }
 
@@ -90,7 +172,16 @@ function renderTable(data){
       <td class="px-3 py-2">${formatDate(item.date)}</td>
       <td class="px-3 py-2 font-semibold">${item.staff}</td>
       <td class="px-3 py-2">${item.shiftLabel}</td>
+<<<<<<< codex/build-internal-website-for-klc-ben-luc-qmk601
+      <td class="px-3 py-2">
+        <div class="flex flex-col gap-1">
+          ${getResultBadge(item)}
+          <span>${item.summary||'-'}</span>
+        </div>
+      </td>
+=======
       <td class="px-3 py-2">${item.summary||'-'}</td>
+>>>>>>> codex/build-internal-website-for-klc-ben-luc-b5jncf
       <td class="px-3 py-2 text-right">
         <div class="flex flex-wrap items-center justify-end gap-2">
           ${pendingIds.has(item.id)?'<span class="badge badge-warning">Chờ duyệt xóa</span>':''}
@@ -118,6 +209,106 @@ function showDetail(id){
   modal.classList.remove('hidden');
 }
 
+<<<<<<< codex/build-internal-website-for-klc-ben-luc-qmk601
+function renderReport(data){
+  if(!reportPanel) return;
+  const total=data.length;
+  const done=data.filter(item=>(item.resultStatus||'done')==='done').length;
+  const pending=total-done;
+  if(reportSummary){
+    if(!total){
+      reportSummary.innerHTML='<div class="text-sm text-slate-500">Chưa có checklist nào.</div>';
+    }else{
+      reportSummary.innerHTML=`
+        <div class="p-4 rounded-xl bg-blue-50 border border-blue-100">
+          <div class="text-xs text-slate-500">Tổng số checklist</div>
+          <div class="text-2xl font-semibold text-brand-blue">${total}</div>
+        </div>
+        <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-100">
+          <div class="text-xs text-slate-500">Đã hoàn thành</div>
+          <div class="text-2xl font-semibold text-emerald-600">${done}</div>
+        </div>
+        <div class="p-4 rounded-xl bg-amber-50 border border-amber-100">
+          <div class="text-xs text-slate-500">Chưa hoàn thành</div>
+          <div class="text-2xl font-semibold text-amber-600">${pending}</div>
+        </div>`;
+    }
+  }
+  if(reportBody){
+    if(!total){
+      reportBody.innerHTML='<div class="text-sm text-slate-500">Chưa có dữ liệu để báo cáo.</div>';
+      return;
+    }
+    const sorted=[...data].sort((a,b)=>new Date(b.date)-new Date(a.date));
+    reportBody.innerHTML=sorted.map(item=>`
+      <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+        <div class="flex items-center justify-between text-xs text-slate-500">
+          <span>${formatDate(item.date)}</span>
+          <span>${item.shiftLabel}</span>
+        </div>
+        <div class="font-semibold text-brand-blue mt-1">${item.staff}</div>
+        <div class="text-sm text-slate-600 mt-1">${item.summary||'Chưa có tổng kết.'}</div>
+        <div class="mt-2">${getResultBadge(item)}</div>
+        ${item.resultStatus==='pending'?`<div class="text-xs text-rose-600 mt-2">Lý do: ${item.pendingReason||'-'}</div><div class="text-xs text-slate-500">Gia hạn: ${item.schedule||'-'}</div>`:''}
+        <div class="flex items-center justify-between mt-3">
+          <button class="text-brand-blue" data-report="view" data-id="${item.id}">Xem chi tiết</button>
+          ${user.role==='admin'?`<button class="text-slate-600" data-report="assign" data-id="${item.id}">Giao thêm việc</button>`:''}
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+function toggleMode(mode){
+  if(schedulePanel){
+    schedulePanel.classList.toggle('hidden',mode!=='schedule');
+  }
+  if(reportPanel){
+    reportPanel.classList.toggle('hidden',mode!=='report');
+  }
+}
+
+function getResultBadge(item){
+  const status=item.resultStatus||'done';
+  if(status==='pending'){
+    return '<span class="badge badge-warning">Chưa hoàn thành</span>';
+  }
+  return '<span class="badge badge-success">Đã hoàn thành</span>';
+}
+
+function assignChecklist(id){
+  const record=checklists.find(item=>item.id===id);
+  if(!record) return;
+  if(modeSelect){
+    modeSelect.value='schedule';
+    toggleMode('schedule');
+  }
+  if(form){
+    if(!staffList.includes(record.staff)){
+      staffList=[record.staff, ...staffList];
+      populateStaffOptions();
+    }
+    form.elements.date.value=record.date;
+    form.elements.staff.value=record.staff;
+    shiftSelect.value=record.shift;
+    updateSlots();
+    window.scrollTo({ top:form.getBoundingClientRect().top + window.scrollY - 120, behavior:'smooth' });
+    toast('Đã điền sẵn ngày và nhân viên. Hãy bổ sung nhiệm vụ mới cho hôm nay.','info');
+  }
+}
+
+function populateStaffOptions(){
+  const select=form?.elements?.staff;
+  if(!select) return;
+  const current=select.value;
+  select.innerHTML=staffList.map(name=>`<option value="${name}">${name}</option>`).join('');
+  if(current && staffList.includes(current)){
+    select.value=current;
+  }
+}
+
+=======
+>>>>>>> codex/build-internal-website-for-klc-ben-luc-b5jncf
 const closeModal=document.getElementById('checklist-detail-close');
 if(closeModal){
   closeModal.addEventListener('click',()=>document.getElementById('checklist-detail').classList.add('hidden'));
@@ -159,6 +350,10 @@ async function handleDelete(id){
       resolvePendingByRecord(COLLECTION,id,'approved','Quản trị viên xóa trực tiếp checklist.');
       checklists=readCollection(COLLECTION);
       renderTable(checklists);
+<<<<<<< codex/build-internal-website-for-klc-ben-luc-qmk601
+      renderReport(checklists);
+=======
+>>>>>>> codex/build-internal-website-for-klc-ben-luc-b5jncf
       hideLoading();
       toast('Đã xóa checklist.','success');
     },300);
@@ -178,6 +373,10 @@ async function handleDelete(id){
     submitDeletionRequest(COLLECTION,record,user,reason.trim());
     toast('Đã gửi yêu cầu xóa checklist đến quản trị viên.','success');
     renderTable(checklists);
+<<<<<<< codex/build-internal-website-for-klc-ben-luc-qmk601
+    renderReport(checklists);
+=======
+>>>>>>> codex/build-internal-website-for-klc-ben-luc-b5jncf
   }catch(err){
     toast(err.message||'Không thể gửi yêu cầu xóa.','error');
   }

@@ -10,6 +10,7 @@
 <body class="bg-slate-100">
 <div id="app-loading" class="flex"></div>
 <div id="toast-stack" class="fixed top-6 right-6 flex flex-col items-end"></div>
+<nav id="app-mobile-nav" class="md:hidden bg-brand-blue"></nav>
 
 <div class="app-shell md:flex">
   <aside id="app-sidebar" class="app-sidebar"></aside>
@@ -20,10 +21,13 @@
         <div class="section-title">Quản lý bảo hành & bảo dưỡng</div>
         <p class="text-sm text-slate-500">Ghi nhận yêu cầu của khách hàng, theo dõi tình trạng xử lý và việc gửi linh kiện. Nhân viên có thể nhập dữ liệu và gửi yêu cầu xóa.</p>
         <p id="service-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang ở chế độ nhân viên: có thể cập nhật phiếu, khi muốn xóa hãy nêu rõ lý do để quản trị viên duyệt.</p>
+
         <div class="flex flex-wrap gap-4">
           <label class="inline-flex items-center gap-2"><input type="radio" name="serviceType" value="warranty" class="h-4 w-4" checked> Bảo hành</label>
           <label class="inline-flex items-center gap-2"><input type="radio" name="serviceType" value="maintenance" class="h-4 w-4"> Bảo dưỡng</label>
         </div>
+
+        <!-- Form bảo hành -->
         <form id="warranty-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label class="flex flex-col">
             <span class="text-xs text-slate-500">Ngày tiếp nhận</span>
@@ -54,6 +58,8 @@
             <textarea name="extra" class="input-brand" rows="2"></textarea>
           </label>
         </form>
+
+        <!-- Form bảo dưỡng -->
         <form id="maintenance-form" class="grid grid-cols-1 md:grid-cols-2 gap-4 hidden">
           <label class="flex flex-col">
             <span class="text-xs text-slate-500">Ngày tiếp nhận</span>
@@ -80,9 +86,10 @@
             <textarea name="extra" class="input-brand" rows="2"></textarea>
           </label>
         </form>
+
         <div id="service-actions" class="flex gap-3">
-          <button form="warranty-form" type="submit" class="btn-brand px-6 py-2.5">Lưu phiếu</button>
-          <button form="maintenance-form" type="submit" class="btn-brand px-6 py-2.5">Lưu phiếu</button>
+          <button type="button" id="service-save" class="btn-brand px-6 py-2.5">Lưu phiếu</button>
+          <button type="button" id="service-reset" class="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-600">Xóa form</button>
         </div>
       </section>
 
@@ -99,7 +106,9 @@
             </select>
           </div>
         </div>
+
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <!-- Bảo hành -->
           <div class="card p-0">
             <div class="px-5 py-4 border-b flex items-center justify-between">
               <div class="font-semibold text-brand-blue">Bảo hành</div>
@@ -119,11 +128,13 @@
                   </tr>
                 </thead>
                 <tbody id="warranty-list" class="divide-y"></tbody>
-            </table>
+              </table>
+            </div>
+            <div class="sticky-actions text-sm text-slate-500">Nhấn “Xóa” để gửi yêu cầu duyệt hoặc xóa ngay nếu bạn là quản trị viên.</div>
           </div>
-          <div class="sticky-actions text-sm text-slate-500">Nhấn “Xóa” để gửi yêu cầu duyệt hoặc xóa ngay nếu bạn là quản trị viên.</div>
-        </div>
-        <div class="card p-0">
+
+          <!-- Bảo dưỡng -->
+          <div class="card p-0">
             <div class="px-5 py-4 border-b flex items-center justify-between">
               <div class="font-semibold text-brand-blue">Bảo dưỡng</div>
               <span class="badge badge-success">Phiếu bảo dưỡng</span>
@@ -139,12 +150,12 @@
                     <th class="px-3 py-3 text-left">Yêu cầu</th>
                     <th class="px-3 py-3 text-left">Theo dõi</th>
                     <th class="px-3 py-3 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody id="maintenance-list" class="divide-y"></tbody>
-            </table>
-          </div>
-          <div class="sticky-actions text-sm text-slate-500">Nhấn “Xóa” để gửi yêu cầu duyệt hoặc xóa ngay nếu bạn là quản trị viên.</div>
+                  </tr>
+                </thead>
+                <tbody id="maintenance-list" class="divide-y"></tbody>
+              </table>
+            </div>
+            <div class="sticky-actions text-sm text-slate-500">Nhấn “Xóa” để gửi yêu cầu duyệt hoặc xóa ngay nếu bạn là quản trị viên.</div>
           </div>
         </div>
       </section>
@@ -170,7 +181,6 @@
   </div>
 </div>
 
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-brand-blue flex gap-2 p-2"></nav>
 <script type="module" src="js/service.js"></script>
 </body>
 </html>

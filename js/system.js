@@ -1,5 +1,5 @@
 import { initApp, ensureAdminUserList, addUser } from './core/app.js';
-import { toast } from './core/ui.js';
+import { toast, confirmAction, showLoading, hideLoading } from './core/ui.js';
 import {
   getUsers,
   getLayoutConfig,
@@ -8,16 +8,36 @@ import {
   getBranding,
   saveBranding,
   applyBrandingTheme,
-  removeItem
+  removeItem,
+  removeUser,
+  getStaff,
+  saveStaff,
+  getSyncConfig,
+  saveSyncConfig,
+  getSyncStatus,
+  testSyncConnection,
+  triggerSyncNow
 } from './core/storage.js';
 import { getDeletionRequests, resolveDeletionRequest } from './core/deletion.js';
 
-const user=initApp('system');
+const user = initApp('system');
 ensureAdminUserList();
+bindUserActions();
 
-const isAdmin=user.role==='admin';
-const form=document.getElementById('user-form');
-const resetBtn=document.getElementById('user-reset');
+const isAdmin = user.role === 'admin';
+const form = document.getElementById('user-form');
+const resetBtn = document.getElementById('user-reset');
+
+const syncForm = document.getElementById('sync-form');
+const syncSaveBtn = document.getElementById('sync-save');
+const syncTestBtn = document.getElementById('sync-test');
+const syncNowBtn = document.getElementById('sync-now');
+const syncStatusLabel = document.getElementById('sync-status-label');
+const syncLastPush = document.getElementById('sync-last-push');
+const syncLastPull = document.getElementById('sync-last-pull');
+const syncError = document.getElementById('sync-error');
+const syncEndpointDisplay = document.getElementById('sync-endpoint-display');
+const syncCopyBtn = document.getElementById('sync-copy');
 
 if(!isAdmin){
   document.getElementById('system-form-wrapper').classList.add('hidden');
@@ -28,7 +48,18 @@ if(!isAdmin){
   setupBrandingSection();
   setupLayoutBuilder();
   renderDeletionRequests();
+  setupStaffManager();
+  setupSyncManager();
 }
+
+window.addEventListener('klc:userlist-updated',()=>{
+  ensureAdminUserList();
+  bindUserActions();
+});
+
+window.addEventListener('klc:sync-updated',evt=>{
+  updateSyncStatus(evt?.detail||getSyncStatus());
+});
 
 function setupUserForm(){
   form.addEventListener('submit',evt=>{
@@ -56,6 +87,36 @@ function setupUserForm(){
   if(resetBtn){
     resetBtn.addEventListener('click',()=>form.reset());
   }
+}
+
+function bindUserActions(){
+  if(!isAdmin) return;
+  const table=document.getElementById('system-user-table');
+  if(!table) return;
+  table.querySelectorAll('[data-action="delete-user"]').forEach(btn=>{
+    btn.removeEventListener('click',handleUserDeleteListener);
+    btn.addEventListener('click',handleUserDeleteListener);
+  });
+}
+
+function handleUserDeleteListener(evt){
+  const username=evt.currentTarget.dataset.username;
+  handleUserDelete(username);
+}
+
+async function handleUserDelete(username){
+  if(username==='admin'){
+    toast('Không thể xóa tài khoản mặc định.','error');
+    return;
+  }
+  if(username===user.username){
+    toast('Bạn không thể tự xóa tài khoản đang đăng nhập.','error');
+    return;
+  }
+  if(!await confirmAction(`Xóa tài khoản "${username}"?`)) return;
+  removeUser(username);
+  toast('Đã xóa tài khoản người dùng.','success');
+  ensureAdminUserList();
 }
 
 function setupBrandingSection(){
@@ -144,6 +205,264 @@ function setupBrandingSection(){
       toast('Đã khôi phục nhận diện mặc định.','success');
     });
   }
+}
+
+function setupStaffManager(){
+  const form=document.getElementById('staff-form');
+  const input=document.getElementById('staff-input');
+  const list=document.getElementById('staff-list');
+  if(!form || !input || !list) return;
+  let staff=getStaff();
+
+  function render(){
+    if(!staff.length){
+      list.innerHTML='<span class="text-sm text-slate-500">Chưa có nhân viên nào.</span>';
+      return;
+    }
+    list.innerHTML=staff.map(name=>
+      `<span class="px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-sm flex items-center gap-2">
+        <span>${name}</span>
+        <button type="button" class="text-rose-600" data-role="remove-staff" data-name="${name}">×</button>
+      </span>`
+    ).join('');
+    list.querySelectorAll('[data-role="remove-staff"]').forEach(btn=>{
+      btn.addEventListener('click',()=>removeStaff(btn.dataset.name));
+    });
+  }
+
+  function removeStaff(name){
+    staff=staff.filter(item=>item!==name);
+    saveStaff(staff);
+    toast(`Đã loại ${name} khỏi danh sách nhân viên.`,'info');
+    staff=getStaff();
+    render();
+  }
+
+  form.addEventListener('submit',evt=>{
+    evt.preventDefault();
+    const name=input.value.trim();
+    if(!name){
+      toast('Vui lòng nhập tên nhân viên.','error');
+      return;
+    }
+    if(staff.includes(name)){
+      toast('Tên nhân viên đã có trong danh sách.','error');
+      return;
+    }
+    staff=[name, ...staff];
+    saveStaff(staff);
+    toast('Đã thêm nhân viên mới.','success');
+    input.value='';
+    staff=getStaff();
+    render();
+  });
+
+  window.addEventListener('klc:staff-updated',evt=>{
+    staff=evt.detail.staff;
+    render();
+  });
+
+  render();
+}
+
+function setupSyncManager(){
+  if(!syncForm) return;
+  const config=getSyncConfig();
+  syncForm.elements.enabled.checked=!!config.enabled;
+  syncForm.elements.endpoint.value=config.endpoint||'';
+  syncForm.elements.method.value=config.method||'PUT';
+  syncForm.elements.authScheme.value=config.authScheme||'Bearer';
+  syncForm.elements.apiKey.value=config.apiKey||'';
+  syncForm.elements.headers.value=headersToTextarea(config.headers);
+  syncForm.elements.pollInterval.value=Math.max(5, Math.round((config.pollInterval||15000)/1000));
+  toggleSyncInputs(config.enabled);
+  refreshSyncEndpointField(config.endpoint);
+
+  syncForm.elements.enabled.addEventListener('change',()=>{
+    toggleSyncInputs(syncForm.elements.enabled.checked);
+  });
+
+  syncSaveBtn?.addEventListener('click',handleSyncSave);
+  syncTestBtn?.addEventListener('click',handleSyncTest);
+  syncNowBtn?.addEventListener('click',handleSyncNow);
+  syncCopyBtn?.addEventListener('click',handleSyncCopy);
+
+  if(typeof fetch!=='function' && syncError){
+    syncError.textContent='Trình duyệt hiện tại không hỗ trợ Fetch API để đồng bộ đám mây.';
+    syncError.classList.remove('hidden');
+  }
+
+  updateSyncStatus(getSyncStatus());
+}
+
+function toggleSyncInputs(enabled){
+  if(!syncForm) return;
+  syncForm.querySelectorAll('[data-sync-field]').forEach(field=>{
+    if(field.name==='enabled') return;
+    field.disabled=!enabled;
+    field.classList.toggle('opacity-60',!enabled);
+  });
+}
+
+function refreshSyncEndpointField(endpoint){
+  if(syncEndpointDisplay){
+    syncEndpointDisplay.value=endpoint||'';
+  }
+}
+
+function headersToTextarea(headers){
+  return (headers||[]).map(item=>`${item.key}: ${item.value}`).join('\n');
+}
+
+function parseHeaderText(raw){
+  return raw
+    .split(/\r?\n/)
+    .map(line=>line.trim())
+    .filter(Boolean)
+    .map(line=>{
+      const [key,...rest]=line.split(':');
+      if(!key || !rest.length) return null;
+      return { key:key.trim(), value:rest.join(':').trim() };
+    })
+    .filter(Boolean);
+}
+
+function collectSyncConfig({ requireEnabled=false }={}){
+  if(!syncForm) return null;
+  const enabled=syncForm.elements.enabled.checked;
+  const endpoint=syncForm.elements.endpoint.value.trim();
+  if(requireEnabled && !enabled){
+    toast('Vui lòng bật đồng bộ trước khi thực hiện.','error');
+    return null;
+  }
+  if(enabled && !endpoint){
+    toast('Vui lòng nhập địa chỉ máy chủ khi bật đồng bộ.','error');
+    return null;
+  }
+  const pollSeconds=parseInt(syncForm.elements.pollInterval.value,10);
+  return {
+    enabled,
+    endpoint,
+    method:syncForm.elements.method.value||'PUT',
+    authScheme:syncForm.elements.authScheme.value||'Bearer',
+    apiKey:syncForm.elements.apiKey.value.trim(),
+    headers:parseHeaderText(syncForm.elements.headers.value),
+    pollInterval:Math.max(5, Number.isNaN(pollSeconds)?15:pollSeconds)*1000
+  };
+}
+
+async function handleSyncSave(evt){
+  evt.preventDefault();
+  const config=collectSyncConfig();
+  if(!config) return;
+  saveSyncConfig(config);
+  refreshSyncEndpointField(getSyncConfig().endpoint);
+  toast('Đã cập nhật cấu hình đồng bộ dữ liệu.','success');
+  updateSyncStatus(getSyncStatus());
+}
+
+async function handleSyncTest(evt){
+  evt.preventDefault();
+  const config=collectSyncConfig({ requireEnabled:true });
+  if(!config) return;
+  saveSyncConfig(config);
+  refreshSyncEndpointField(getSyncConfig().endpoint);
+  updateSyncStatus(getSyncStatus());
+  try{
+    showLoading('Đang kiểm tra kết nối…');
+    await testSyncConnection();
+    toast('Máy chủ đồng bộ phản hồi tốt.','success');
+  }catch(err){
+    toast(err.message||'Không thể kết nối máy chủ đồng bộ.','error');
+  }finally{
+    hideLoading();
+  }
+}
+
+async function handleSyncNow(evt){
+  evt.preventDefault();
+  const config=collectSyncConfig({ requireEnabled:true });
+  if(!config) return;
+  saveSyncConfig(config);
+  refreshSyncEndpointField(getSyncConfig().endpoint);
+  updateSyncStatus(getSyncStatus());
+  try{
+    showLoading('Đang đồng bộ dữ liệu với máy chủ…');
+    await triggerSyncNow('both');
+    toast('Đã đồng bộ dữ liệu thành công.','success');
+  }catch(err){
+    toast(err.message||'Không thể đồng bộ ngay.','error');
+  }finally{
+    hideLoading();
+  }
+}
+
+function handleSyncCopy(evt){
+  evt.preventDefault();
+  const liveEndpoint=(syncEndpointDisplay?.value||'').trim();
+  const formEndpoint=syncForm?.elements?.endpoint?.value?.trim()||'';
+  const endpoint=liveEndpoint||formEndpoint||getSyncConfig().endpoint||'';
+  if(!endpoint){
+    toast('Chưa có đường dẫn đồng bộ để sao chép.','error');
+    return;
+  }
+  const copyText=async()=>{
+    if(navigator.clipboard?.writeText){
+      await navigator.clipboard.writeText(endpoint);
+      toast('Đã sao chép đường dẫn đồng bộ.','success');
+      return true;
+    }
+    return false;
+  };
+  copyText().catch(()=>false).then(success=>{
+    if(success) return;
+    try{
+      const temp=document.createElement('textarea');
+      temp.value=endpoint;
+      temp.setAttribute('readonly','');
+      temp.style.position='absolute';
+      temp.style.left='-9999px';
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      document.body.removeChild(temp);
+      toast('Đã sao chép đường dẫn đồng bộ.','success');
+    }catch(err){
+      toast('Không thể sao chép tự động, vui lòng copy thủ công từ ô bên cạnh.','error');
+    }
+  });
+}
+
+function updateSyncStatus(status){
+  if(!syncStatusLabel) return;
+  const enabled=status.enabled;
+  syncStatusLabel.textContent=enabled?'Đang bật':'Đang tắt';
+  syncStatusLabel.className=`badge ${enabled?'badge-info':'badge-warning'}`;
+  if(syncLastPush){
+    syncLastPush.textContent=formatDateTime(status.lastPush);
+  }
+  if(syncLastPull){
+    syncLastPull.textContent=formatDateTime(status.lastPull);
+  }
+  if(syncError){
+    syncError.textContent=status.lastError||'';
+    syncError.classList.toggle('hidden',!status.lastError);
+  }
+  [syncTestBtn, syncNowBtn].forEach(btn=>{
+    if(!btn) return;
+    btn.disabled=!enabled;
+    btn.classList.toggle('opacity-50',!enabled);
+    btn.classList.toggle('cursor-not-allowed',!enabled);
+    btn.classList.toggle('pointer-events-none',!enabled);
+  });
+  refreshSyncEndpointField(getSyncConfig().endpoint);
+}
+
+function formatDateTime(value){
+  if(!value) return 'Chưa có';
+  const date=new Date(value);
+  if(Number.isNaN(date.getTime())) return 'Chưa có';
+  return date.toLocaleString('vi-VN');
 }
 
 function setupLayoutBuilder(){

@@ -1,50 +1,62 @@
 import { initApp } from './core/app.js';
-import { readCollection, getLayoutConfig } from './core/storage.js';
+import { readCollection, getLayoutConfig, subscribeCollection } from './core/storage.js';
 import { showLoading, hideLoading } from './core/ui.js';
 
 initApp('dashboard');
 
-const financeData=readCollection('finance');
-const customers=readCollection('customers');
-const careRecords=readCollection('care');
-const services=readCollection('services');
+let financeData = readCollection('finance');
+let customers   = readCollection('customers');
+let careRecords = readCollection('care');
+let services    = readCollection('services');
 
-const layoutConfig=getLayoutConfig();
-buildLayout(layoutConfig);
+buildLayout(getLayoutConfig());
 hydrateDashboard();
 
+// Realtime update theo collection
+subscribeCollection('finance', data => {
+  financeData = data;
+  renderSummary();
+  renderRangeSummary();
+  renderCharts();
+  renderActivity();
+});
+
+subscribeCollection('customers', data => {
+  customers = data;
+  renderSummary();
+  renderActivity();
+});
+
+subscribeCollection('care', data => {
+  careRecords = data;
+  renderActivity();
+});
+
+subscribeCollection('services', data => {
+  services = data;
+  renderSummary();
+});
+
+subscribeCollection('layout', () => {
+  buildLayout(getLayoutConfig());
+  hydrateDashboard();
+});
+
 function buildLayout(layout){
-  const container=document.getElementById('page-content');
+  const container = document.getElementById('page-content');
   if(!container) return;
-  container.innerHTML='';
+  container.innerHTML = '';
   layout.forEach(block=>{
     switch(block.type){
-      case 'summary':
-        container.appendChild(createSummaryBlock(block));
-        break;
-      case 'range':
-        container.appendChild(createRangeBlock(block));
-        break;
-      case 'chart':
-        container.appendChild(createChartBlock(block));
-        break;
-      case 'shortcuts':
-        container.appendChild(createShortcutsBlock(block));
-        break;
-      case 'media':
-        container.appendChild(createMediaBlock(block));
-        break;
-      case 'html':
-        container.appendChild(createHtmlBlock(block));
-        break;
-      case 'activities':
-        container.appendChild(createActivityBlock(block));
-        break;
-      case 'note':
-        container.appendChild(createNoteBlock(block));
-        break;
-      default:
-        break;
+      case 'summary':    container.appendChild(createSummaryBlock(block)); break;
+      case 'range':      container.appendChild(createRangeBlock(block)); break;
+      case 'chart':      container.appendChild(createChartBlock(block)); break;
+      case 'shortcuts':  container.appendChild(createShortcutsBlock(block)); break;
+      case 'media':      container.appendChild(createMediaBlock(block)); break;
+      case 'html':       container.appendChild(createHtmlBlock(block)); break;
+      case 'activities': container.appendChild(createActivityBlock(block)); break;
+      case 'note':       container.appendChild(createNoteBlock(block)); break;
+      default: break;
     }
   });
 }
@@ -139,10 +151,7 @@ function createShortcutsBlock(block){
   }
   const links=(Array.isArray(block.links)?block.links:[])
     .filter(link=>(link?.label||'').trim())
-    .map(link=>({
-      label:link.label.trim(),
-      href:(link.href||'').trim()
-    }));
+    .map(link=>({ label:link.label.trim(), href:(link.href||'').trim() }));
   if(!links.length){
     const empty=document.createElement('div');
     empty.className='text-sm text-slate-500';
@@ -229,12 +238,12 @@ function renderSummary(){
   const revenueEl=document.getElementById('card-revenue');
   const expenseEl=document.getElementById('card-expense');
   if(!totalCustomers) return;
-  totalCustomers.textContent=customers.length;
-  todayCare.textContent=careRecords.filter(item=>sameDate(item.date,new Date())).length;
-  const revenue=financeData.filter(x=>x.type==='income').reduce((sum,x)=>sum+Number(x.amount||0),0);
-  const expense=financeData.filter(x=>x.type==='expense').reduce((sum,x)=>sum+Number(x.amount||0),0);
-  revenueEl.textContent=numberFormat(revenue);
-  expenseEl.textContent=numberFormat(expense);
+  totalCustomers.textContent = customers.length;
+  todayCare.textContent     = careRecords.filter(item=>sameDate(item.date,new Date())).length;
+  const revenue = financeData.filter(x=>x.type==='income').reduce((sum,x)=>sum+Number(x.amount||0),0);
+  const expense = financeData.filter(x=>x.type==='expense').reduce((sum,x)=>sum+Number(x.amount||0),0);
+  revenueEl.textContent = numberFormat(revenue);
+  expenseEl.textContent = numberFormat(expense);
 }
 
 function bindRangeFilter(){
@@ -262,8 +271,8 @@ function renderRangeSummary(){
     const d=new Date(item.date);
     return (!from||d>=from) && (!to||d<=to);
   });
-  const sumIn=filtered.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount||0),0);
-  const sumOut=filtered.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount||0),0);
+  const sumIn = filtered.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount||0),0);
+  const sumOut= filtered.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount||0),0);
   summaryContainer.innerHTML=`<div class="font-semibold text-brand-blue">Tổng thu: ${numberFormat(sumIn)} đ</div>
     <div class="font-semibold text-rose-600">Tổng chi: ${numberFormat(sumOut)} đ</div>`;
 }
@@ -271,13 +280,24 @@ function renderRangeSummary(){
 function renderCharts(){
   const canvas=document.getElementById('finance-chart');
   if(!canvas||!window.Chart) return;
+  // Khởi tạo lại mỗi lần (đơn giản). Nếu muốn tối ưu, lưu chart instance và destroy trước khi vẽ mới.
   const months=Array.from({length:12},(_,i)=>i+1);
   const incomePerMonth=months.map(month=>sumFinance(month,'income'));
   const expensePerMonth=months.map(month=>sumFinance(month,'expense'));
-  new window.Chart(canvas,{ type:'line', data:{ labels:months.map(m=>`Th ${m}`), datasets:[
-    { label:'Thu', data:incomePerMonth, borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.15)', tension:.4, fill:true },
-    { label:'Chi', data:expensePerMonth, borderColor:'#dc2626', backgroundColor:'rgba(220,38,38,.15)', tension:.4, fill:true }
-  ]}, options:{ plugins:{legend:{display:true}}, scales:{ y:{ beginAtZero:true, ticks:{ callback:value=>numberFormat(value) }} } }});
+  new window.Chart(canvas,{
+    type:'line',
+    data:{
+      labels:months.map(m=>`Th ${m}`),
+      datasets:[
+        { label:'Thu', data:incomePerMonth, borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.15)', tension:.4, fill:true },
+        { label:'Chi', data:expensePerMonth, borderColor:'#dc2626', backgroundColor:'rgba(220,38,38,.15)', tension:.4, fill:true }
+      ]
+    },
+    options:{
+      plugins:{ legend:{ display:true }},
+      scales:{ y:{ beginAtZero:true, ticks:{ callback:value=>numberFormat(value) }} }
+    }
+  });
 }
 
 function renderActivity(){
@@ -287,7 +307,9 @@ function renderActivity(){
     ...financeData.slice(0,5).map(f=>({ date:f.date, title:`${f.type==='income'?'Thu':'Chi'}: ${f.title}`, subtitle:numberFormat(f.amount||0) })),
     ...careRecords.slice(0,5).map(c=>({ date:c.date, title:`CSKH: ${c.name}`, subtitle:c.channel })),
     ...services.slice(0,5).map(s=>({ date:s.date, title:`${s.type==='warranty'?'Bảo hành':'Bảo dưỡng'}: ${s.name}`, subtitle:s.product||s.extra }))
-  ].filter(item=>item.date).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
+  ].filter(item=>item.date)
+   .sort((a,b)=>new Date(b.date)-new Date(a.date))
+   .slice(0,6);
   list.innerHTML=items.map(item=>`<li class="flex justify-between items-center py-2 border-b border-slate-200 last:border-b-0">
       <div>
         <div class="font-semibold text-brand-blue">${item.title}</div>
@@ -298,7 +320,8 @@ function renderActivity(){
 }
 
 function sumFinance(month,type){
-  return financeData.filter(item=>item.type===type && new Date(item.date).getMonth()+1===month)
+  return financeData
+    .filter(item=>item.type===type && new Date(item.date).getMonth()+1===month)
     .reduce((sum,item)=>sum+Number(item.amount||0),0);
 }
 

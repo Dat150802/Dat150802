@@ -9,7 +9,7 @@ const navItems=[
   { id:'checklist', label:'CheckList công việc', href:'checklist.html', icon:'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', roles:['admin','staff'] },
   { id:'inventory', label:'Tồn kho', href:'inventory.html', icon:'M3 3h18v4H3zM3 9h18v12H3z', roles:['admin','staff'] },
   { id:'finance', label:'Thu & Chi', href:'finance.html', icon:'M12 8c-1.657 0-3 1.343-3 3h6c0-1.657-1.343-3-3-3zm0 9c1.657 0 3-1.343 3-3H9c0 1.657 1.343 3 3 3zm0-13c4.97 0 9 4.03 9 9s-4.03 9-9 9-9-4.03-9-9 4.03-9 9-9z', roles:['admin','staff'] },
-  { id:'system', label:'Thiết lập hệ thống', href:'system.html', icon:'M10.325 4.317l.177-.616A1 1 0 0111.463 3h1.074a1 1 0 01.961.701l.177.616a1.724 1.724 0 002.573 1.066l.543-.314a1 1 0 011.366.366l.537.93a1 1 0 01-.21 1.3l-.492.401a1.724 1.724 0 000 2.666l.492.401a1 1 0 01.21 1.3l-.537.93a1 1 0 01-1.366.366l-.543-.314a1.724 1.724 0 00-2.573 1.066l-.177.616a1 1 0 01-.961.701h-1.074a1 1 0 01-.961-.701l-.177-.616a1.724 1.724 0 00-2.573-1.066l-.543.314a1 1 0 01-1.366-.366l-.537-.93a1 1 0 01.21-1.3l.492-.401a1.724 1.724 0 000-2.666l-.492-.401a1 1 0 01-.21-1.3l.537-.93a1 1 0 011.366-.366l.543.314a1.724 1.724 0 002.573-1.066z', roles:['admin'] }
+  { id:'system', label:'Thiết lập hệ thống', href:'system.html', icon:'M10.325 4.317l.177-.616A1 1 0 0111.463 3h1.074a1 1 0 01.961.701l.177.616a1.724 1.724 0 002.573 1.066l.543-.314a1 1 0 011.366.366l.537.93a1 1 0 01-.21 1.3l-.492.401a1.724 1.724 0 000 2.666l.492.401a1 1 0 01.21 1.3l-.537.93a1 1 0 01-1.366.366l-.543-.314a1.724 1.724 0 00-2.573 1.066l-.177.616a1 1 0 01-.961.701h-1.074a1 1 0 01-.961-.701l-.177-.616a1.724 1.724 0 00-2.573-1.066z', roles:['admin'] }
 ];
 
 export function initApp(currentId){
@@ -58,21 +58,38 @@ function buildTopbar(user){
 function buildMobileNav(currentId,user,branding){
   const nav=document.getElementById('app-mobile-nav');
   if(!nav) return;
+  const items=navItems.filter(item=>item.roles.includes(user.role));
   nav.style.background=branding.accent||'var(--brand-blue)';
-  nav.innerHTML=navItems.filter(item=>item.roles.includes(user.role)).map(item=>
+  nav.innerHTML=items.map(item=>
     `<a class="mobile-nav-item ${item.id===currentId?'active':''}" href="${item.href}">${item.label}</a>`
   ).join('');
+  if(typeof document!=='undefined'){
+    document.body.classList.toggle('has-mobile-nav', items.length>0);
+  }
 }
 
 export function ensureAdminUserList(){
   const table=document.getElementById('system-user-table');
   if(!table) return;
   const users=getUsers();
-  table.innerHTML=users.map(user=>`<tr>
+  const includeActions=table.dataset.actions==='true';
+  table.innerHTML=users.map(user=>{
+    const roleLabel=user.role==='admin'?'Quản trị viên':'Nhân viên';
+    const actionCell=!includeActions?'' : `<td class="px-3 py-2 text-right">
+        ${user.username==='admin'
+          ? '<span class="text-slate-400">Mặc định</span>'
+          : `<button class="text-rose-600 font-semibold" data-action="delete-user" data-username="${user.username}">Xóa</button>`}
+      </td>`;
+    return `<tr>
       <td class="px-3 py-2 font-semibold">${user.username}</td>
       <td class="px-3 py-2">${user.name}</td>
-      <td class="px-3 py-2">${user.role==='admin'?'Quản trị viên':'Nhân viên'}</td>
-    </tr>`).join('');
+      <td class="px-3 py-2">${roleLabel}</td>
+      ${actionCell}
+    </tr>`;
+  }).join('');
+  if(typeof window!=='undefined'){
+    window.dispatchEvent(new CustomEvent('klc:userlist-updated',{ detail:{ users }}));
+  }
 }
 
 export function addUser(account){
