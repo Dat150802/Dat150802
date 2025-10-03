@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KLC Bến Lức - Hệ thống quản trị nội bộ</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+  <script type="module" src="app.js" defer></script>
+</head>
+<body>
+  <div id="loader" class="loader hidden">
+    <div class="spinner"></div>
+    <p id="loader-message">Đang xử lý...</p>
+  </div>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <img id="brand-logo" src="assets/logo.svg" alt="Logo KLC" />
+        <div>
+          <h1>KLC Bến Lức</h1>
+          <p class="role-label" id="role-label">Đăng nhập để tiếp tục</p>
+        </div>
+      </div>
+      <nav>
+        <button class="nav-link active" data-target="dashboard">Trang chủ</button>
+        <button class="nav-link" data-target="customers">Khách hàng</button>
+        <button class="nav-link" data-target="care">CSKH</button>
+        <button class="nav-link" data-target="service">Bảo hành &amp; Bảo dưỡng</button>
+        <button class="nav-link" data-target="checklist">CheckList công việc</button>
+        <button class="nav-link" data-target="inventory">Tồn kho</button>
+        <button class="nav-link" data-target="finance">Thu &amp; Chi</button>
+        <button class="nav-link" data-target="settings">Tùy chỉnh</button>
+      </nav>
+      <div class="sidebar-footer">
+        <button id="logout-btn" class="ghost">Đăng xuất</button>
+      </div>
+    </aside>
+
+    <main>
+      <section id="login" class="card">
+        <div class="login-card">
+          <img src="assets/logo.svg" alt="Logo KLC" class="login-logo" />
+          <h2>Đăng nhập hệ thống</h2>
+          <form id="login-form">
+            <label>Tài khoản
+              <input type="text" id="login-username" required autocomplete="username" />
+            </label>
+            <label>Mật khẩu
+              <input type="password" id="login-password" required autocomplete="current-password" />
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" id="remember-me" />
+              <span>Nhớ mật khẩu</span>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" id="stay-signed" />
+              <span>Duy trì đăng nhập trên thiết bị này</span>
+            </label>
+            <button type="submit" class="primary w-100">Đăng nhập</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="dashboard" class="page active">
+        <header class="page-header">
+          <h2>Trang chủ</h2>
+          <p>Thống kê tổng quan các hoạt động</p>
+        </header>
+        <div class="grid dashboard-grid" id="dashboard-widgets">
+          <article class="card widget" data-widget="customers">
+            <header>
+              <h3>Khách hàng</h3>
+              <span class="tag" id="total-customers">0</span>
+            </header>
+            <canvas id="customer-growth"></canvas>
+          </article>
+          <article class="card widget" data-widget="care">
+            <header>
+              <h3>CSKH</h3>
+              <span class="tag" id="total-care">0</span>
+            </header>
+            <canvas id="care-chart"></canvas>
+          </article>
+          <article class="card widget" data-widget="service">
+            <header>
+              <h3>Bảo hành/Bảo dưỡng</h3>
+              <span class="tag" id="total-service">0</span>
+            </header>
+            <canvas id="service-chart"></canvas>
+          </article>
+          <article class="card widget" data-widget="finance">
+            <header>
+              <h3>Thu &amp; Chi</h3>
+              <span class="tag" id="finance-balance">0 đ</span>
+            </header>
+            <canvas id="finance-chart"></canvas>
+          </article>
+        </div>
+        <div class="card">
+          <header>
+            <h3>Bộ lọc báo cáo</h3>
+          </header>
+          <form id="report-filter" class="form-inline">
+            <label>Ngày bắt đầu
+              <input type="date" id="report-start" />
+            </label>
+            <label>Ngày kết thúc
+              <input type="date" id="report-end" />
+            </label>
+            <label>Loại dữ liệu
+              <select id="report-type">
+                <option value="customers">Khách hàng</option>
+                <option value="care">CSKH</option>
+                <option value="service">Bảo hành/Bảo dưỡng</option>
+                <option value="inventory">Tồn kho</option>
+                <option value="finance">Thu &amp; Chi</option>
+              </select>
+            </label>
+            <button type="submit" class="primary">Tạo báo cáo</button>
+          </form>
+          <div id="report-result" class="report-result"></div>
+        </div>
+      </section>
+
+      <section id="customers" class="page">
+        <header class="page-header">
+          <h2>Khách hàng</h2>
+          <p>Quản lý thông tin khách hàng và lịch sử mua hàng</p>
+        </header>
+        <div class="card">
+          <form id="customer-form" class="form-grid">
+            <label>Ngày ghi nhận
+              <input type="date" name="date" required />
+            </label>
+            <label>Họ và tên
+              <input type="text" name="name" required />
+            </label>
+            <label>Số điện thoại
+              <input type="tel" name="phone" required />
+            </label>
+            <label>Địa chỉ
+              <input type="text" name="address" />
+            </label>
+            <label>Nguồn khách
+              <select name="source" id="customer-source">
+                <option value="store">Khách ghé ngang cửa hàng</option>
+                <option value="online">Khách online</option>
+                <option value="referral">Khách cũ giới thiệu</option>
+                <option value="returning">Khách cũ mua lại</option>
+                <option value="staff">Người quen nhân viên</option>
+                <option value="other">Khác</option>
+              </select>
+            </label>
+            <label id="source-detail-wrapper" class="full">
+              <span>Chi tiết nguồn khách</span>
+              <input type="text" name="sourceDetail" placeholder="Nhập chi tiết nguồn" />
+            </label>
+            <label class="checkbox full">
+              <input type="checkbox" name="hasPurchased" id="has-purchased" />
+              <span>Khách đã mua</span>
+            </label>
+            <div id="purchase-info" class="full toggle-panel hidden">
+              <label>Mẫu ghế đã mua
+                <input type="text" name="purchasedItems" placeholder="Ví dụ: Ghế massage KLC" />
+              </label>
+              <label>Giá trị đơn hàng
+                <input type="number" name="purchaseValue" min="0" step="1000" />
+              </label>
+            </div>
+            <div id="consult-info" class="full toggle-panel">
+              <label>Các mẫu đã tư vấn
+                <input type="text" name="consultedItems" placeholder="Nhập các mẫu ghế đã tư vấn" />
+              </label>
+              <label>Phương án giá/Trả góp
+                <input type="text" name="pricingOptions" placeholder="Ví dụ: Trả góp 0% 12 tháng" />
+              </label>
+            </div>
+            <label class="full">Ghi chú
+              <textarea name="notes" rows="3"></textarea>
+            </label>
+            <div class="form-actions full">
+              <button type="submit" class="primary">Lưu</button>
+              <button type="reset" class="ghost" id="customer-reset">Xóa form</button>
+            </div>
+          </form>
+        </div>
+        <hr />
+        <div class="card">
+          <header class="section-header">
+            <h3>Danh sách khách hàng</h3>
+            <div class="actions">
+              <input type="search" id="customer-search" placeholder="Tìm kiếm theo tên, số điện thoại, nguồn..." />
+            </div>
+          </header>
+          <table class="data-table" id="customer-table">
+            <thead>
+              <tr>
+                <th>Ngày</th>
+                <th>Tên</th>
+                <th>Điện thoại</th>
+                <th>Nguồn</th>
+                <th>Trạng thái</th>
+                <th>Ghi chú</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div class="table-actions">
+            <button class="secondary" id="open-care-from-customer">CSKH</button>
+            <button class="secondary" id="open-history">Xem lịch sử</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="care" class="page">
+        <header class="page-header">
+          <h2>Chăm sóc khách hàng</h2>
+          <p>Theo dõi tương tác và đánh giá tiềm năng khách hàng</p>
+        </header>
+        <div class="card">
+          <form id="care-form" class="form-grid">
+            <label>Ngày chăm sóc
+              <input type="date" name="date" required />
+            </label>
+            <label>Họ và tên
+              <input list="customer-names" name="name" required />
+            </label>
+            <datalist id="customer-names"></datalist>
+            <label>Số điện thoại
+              <input list="customer-phones" name="phone" required />
+            </label>
+            <datalist id="customer-phones"></datalist>
+            <label>Địa chỉ
+              <input type="text" name="address" />
+            </label>
+            <label>Nhân viên CSKH
+              <select name="staff" id="care-staff"></select>
+            </label>
+            <label>Hình thức CSKH
+              <select name="method">
+                <option value="call">Gọi điện</option>
+                <option value="sms">Nhắn tin</option>
+                <option value="broadcast">Gửi tin nhắn hàng loạt</option>
+                <option value="call_sms">Gọi điện + nhắn tin</option>
+              </select>
+            </label>
+            <label class="full">Nội dung CSKH
+              <textarea name="content" rows="2" required></textarea>
+            </label>
+            <label class="full">Phản hồi khách hàng
+              <textarea name="feedback" rows="2"></textarea>
+            </label>
+            <label class="full">Ghi chú
+              <textarea name="notes" rows="2"></textarea>
+            </label>
+            <fieldset class="full">
+              <legend>Đánh giá khách hàng</legend>
+              <label class="checkbox"><input type="radio" name="rating" value="potential" required /> Khách còn tiềm năng</label>
+              <label class="checkbox"><input type="radio" name="rating" value="nurturing" /> Đang nuôi khách</label>
+              <label class="checkbox"><input type="radio" name="rating" value="scheduled" /> Đang hẹn lên</label>
+              <label class="checkbox">
+                <input type="radio" name="rating" value="lost" /> Hết tiềm năng
+              </label>
+              <label id="lost-reason" class="toggle-panel hidden">Lý do
+                <input type="text" name="lostReason" />
+              </label>
+              <div id="schedule-panel" class="toggle-panel hidden">
+                <label>Ngày hẹn
+                  <input type="date" name="appointmentDate" />
+                </label>
+                <label>Giờ hẹn
+                  <input type="time" name="appointmentTime" />
+                </label>
+              </div>
+            </fieldset>
+            <div class="form-actions full">
+              <button type="submit" class="primary">Lưu</button>
+              <button type="reset" class="ghost" id="care-reset">Xóa form</button>
+            </div>
+          </form>
+        </div>
+        <hr />
+        <div class="card">
+          <header class="section-header">
+            <h3>Danh sách chăm sóc</h3>
+            <input type="search" id="care-search" placeholder="Tìm kiếm khách hàng..." />
+          </header>
+          <table class="data-table" id="care-table">
+            <thead>
+              <tr>
+                <th>Ngày</th>
+                <th>Tên</th>
+                <th>Nhân viên</th>
+                <th>Hình thức</th>
+                <th>Đánh giá</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="service" class="page">
+        <header class="page-header">
+          <h2>Bảo hành &amp; Bảo dưỡng</h2>
+          <p>Quản lý hỗ trợ sau bán hàng</p>
+        </header>
+        <div class="card">
+          <div class="tab-header">
+            <button class="sub-tab active" data-target="warranty-form">Bảo hành</button>
+            <button class="sub-tab" data-target="maintenance-form">Bảo dưỡng</button>
+          </div>
+          <form id="warranty-form" class="form-grid sub-tab-panel active">
+            <label>Ngày tiếp nhận
+              <input type="date" name="date" required />
+            </label>
+            <label>Tên khách hàng
+              <input type="text" name="name" required />
+            </label>
+            <label>Số điện thoại
+              <input type="tel" name="phone" required />
+            </label>
+            <label>Địa chỉ
+              <input type="text" name="address" />
+            </label>
+            <label>Mẫu ghế
+              <input type="text" name="model" />
+            </label>
+            <label>Tình trạng
+              <textarea name="status" rows="2"></textarea>
+            </label>
+            <label>Yêu cầu thêm
+              <textarea name="request" rows="2"></textarea>
+            </label>
+            <div class="form-actions full">
+              <button type="submit" class="primary">Lưu</button>
+              <button type="reset" class="ghost">Xóa form</button>
+            </div>
+          </form>
+          <form id="maintenance-form" class="form-grid sub-tab-panel">
+            <label>Ngày tiếp nhận
+              <input type="date" name="date" required />
+            </label>
+            <label>Tên khách hàng
+              <input type="text" name="name" required />
+            </label>
+            <label>Số điện thoại
+              <input type="tel" name="phone" required />
+            </label>
+            <label>Địa chỉ
+              <input type="text" name="address" />
+            </label>
+            <label>Mẫu ghế
+              <input type="text" name="model" />
+            </label>
+            <label>Yêu cầu thêm
+              <textarea name="request" rows="2"></textarea>
+            </label>
+            <div class="form-actions full">
+              <button type="submit" class="primary">Lưu</button>
+              <button type="reset" class="ghost">Xóa form</button>
+            </div>
+          </form>
+        </div>
+        <hr />
+        <div class="card">
+          <header class="section-header">
+            <h3>Danh sách bảo hành</h3>
+            <input type="search" id="warranty-search" placeholder="Tìm kiếm..." />
+          </header>
+          <table class="data-table" id="warranty-table">
+            <thead>
+              <tr>
+                <th>Ngày</th>
+                <th>Tên</th>
+                <th>Mẫu ghế</th>
+                <th>Tình trạng</th>
+                <th>Hỗ trợ</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <header class="section-header">
+            <h3>Danh sách bảo dưỡng</h3>
+            <div class="actions">
+              <input type="search" id="maintenance-search" placeholder="Tìm kiếm..." />
+              <select id="service-filter">
+                <option value="all">Tất cả</option>
+                <option value="pending">Khách chưa hỗ trợ</option>
+                <option value="supported">Khách đã hỗ trợ</option>
+                <option value="shipped">Đã gửi linh kiện</option>
+              </select>
+            </div>
+          </header>
+          <table class="data-table" id="maintenance-table">
+            <thead>
+              <tr>
+                <th>Ngày</th>
+                <th>Tên</th>
+                <th>Mẫu ghế</th>
+                <th>Yêu cầu</th>
+                <th>Trạng thái</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="checklist" class="page">
+        <header class="page-header">
+          <h2>CheckList công việc</h2>
+          <p>Quản lý công việc hằng ngày của nhân viên</p>
+        </header>
+        <div class="card">
+          <div class="tab-header">
+            <button class="sub-tab active" data-target="task-template">Hạng mục công việc</button>
+            <button class="sub-tab" data-target="task-report">Báo cáo công việc</button>
+          </div>
+          <form id="task-template" class="form-grid sub-tab-panel active">
+            <label>Ngày áp dụng
+              <input type="date" name="date" required />
+            </label>
+            <label>Nhân viên
+              <select name="staff" id="task-template-staff"></select>
+            </label>
+            <label>Ca làm việc
+              <select name="shift" id="task-template-shift">
+                <option value="morning">Ca sáng (08:00 - 16:00)</option>
+                <option value="evening">Ca chiều (13:00 - 21:00)</option>
+                <option value="full">Ca full (08:00 - 21:00)</option>
+              </select>
+            </label>
+            <label class="full">Hạng mục công việc
+              <textarea name="tasks" rows="3" placeholder="Nhập từng đầu việc, mỗi dòng một mục" required></textarea>
+            </label>
+            <label class="full">Ghi chú quản lý
+              <textarea name="notes" rows="2"></textarea>
+            </label>
+            <div class="form-actions full">
+              <button type="submit" class="primary">Lưu hạng mục</button>
+              <button type="reset" class="ghost">Xóa form</button>
+            </div>
+          </form>
+          <form id="task-report" class="form-grid sub-tab-panel">
+            <label>Ngày báo cáo
+              <input type="date" name="date" required />
+            </label>
+            <label>Nhân viên
+              <select name="staff" id="task-report-staff"></select>
+            </label>
+            <label>Ca làm việc
+              <select name="shift" id="task-report-shift"></select>
+            </label>
+            <label class="full">Tiến độ theo khung giờ
+              <textarea name="progress" rows="3" placeholder="Ví dụ: 08:00 - 09:00: ..." required></textarea>
+            </label>
+            <label>Hoàn thành
+              <select name="status">
+                <option value="done">Hoàn thành</option>
+                <option value="partial">Chưa hoàn thành</option>
+              </select>
+            </label>
+            <label class="full">Lý do chưa hoàn thành
+              <textarea name="reason" rows="2" placeholder="Điền nếu chưa hoàn thành"></textarea>
+            </label>
+            <label class="full">Dự kiến hoàn thành
+              <input type="text" name="expected" placeholder="Ví dụ: 15/05/2024" />
+            </label>
+            <label class="full">Báo cáo tổng kết
+              <textarea name="summary" rows="2"></textarea>
+            </label>
+            <div class="form-actions full">
+              <button type="submit" class="primary">Lưu báo cáo</button>
+              <button type="reset" class="ghost">Xóa form</button>
+            </div>
+          </form>
+        </div>
+        <hr />
+        <div class="grid two-columns">
+          <div class="card">
+            <header class="section-header">
+              <h3>Danh sách hạng mục công việc</h3>
+              <input type="search" id="task-template-search" placeholder="Tìm kiếm..." />
+            </header>
+            <table class="data-table" id="task-template-table">
+              <thead>
+                <tr>
+                  <th>Ngày</th>
+                  <th>Nhân viên</th>
+                  <th>Ca</th>
+                  <th>Số lượng mục</th>
+                  <th>Hành động</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <header class="section-header">
+              <h3>Danh sách báo cáo công việc</h3>
+              <input type="search" id="task-report-search" placeholder="Tìm kiếm..." />
+            </header>
+            <table class="data-table" id="task-report-table">
+              <thead>
+                <tr>
+                  <th>Ngày</th>
+                  <th>Nhân viên</th>
+                  <th>Ca</th>
+                  <th>Trạng thái</th>
+                  <th>Hành động</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="inventory" class="page">
+        <header class="page-header">
+          <h2>Tồn kho</h2>
+          <p>Quản lý nhập xuất và tồn kho hằng ngày</p>
+        </header>
+        <div class="card">
+          <form id="inventory-form" class="form-grid">
+            <label>Ngày ghi nhận
+              <input type="date" name="date" required />
+            </label>
+            <label>Loại giao dịch
+              <select name="type">
+                <option value="import">Nhập kho</option>
+                <option value="export">Xuất kho</option>
+              </select>
+            </label>
+            <label>Tên sản phẩm
+              <input type="text" name="item" required />
+            </label>
+            <label>Mã sản phẩm
+              <input type="text" name="sku" />
+            </label>
+            <label>Số lượng
+              <input type="number" name="quantity" min="1" required />
+            </label>
+            <label>Đơn vị tính
+              <input type="text" name="unit" placeholder="Ví dụ: chiếc" />
+            </label>
+            <label class="full">Ghi chú
+              <textarea name="notes" rows="2"></textarea>
+            </label>
+            <div class="form-actions full">
+              <button type="submit" class="primary">Lưu</button>
+              <button type="reset" class="ghost">Xóa form</button>
+            </div>
+          </form>
+        </div>
+        <hr />
+        <div class="card">
+          <header class="section-header">
+            <h3>Danh sách tồn kho</h3>
+            <div class="actions">
+              <input type="search" id="inventory-search" placeholder="Tìm kiếm sản phẩm..." />
+              <select id="inventory-filter">
+                <option value="all">Tất cả</option>
+                <option value="import">Nhập kho</option>
+                <option value="export">Xuất kho</option>
+              </select>
+            </div>
+          </header>
+          <table class="data-table" id="inventory-table">
+            <thead>
+              <tr>
+                <th>Ngày</th>
+                <th>Sản phẩm</th>
+                <th>Loại</th>
+                <th>Số lượng</th>
+                <th>Tồn cuối</th>
+                <th>Ghi chú</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="finance" class="page">
+        <header class="page-header">
+          <h2>Thu &amp; Chi</h2>
+          <p>Theo dõi dòng tiền và báo cáo tài chính</p>
+        </header>
+        <div class="card">
+          <form id="finance-form" class="form-grid">
+            <label>Ngày giao dịch
+              <input type="date" name="date" required />
+            </label>
+            <label>Loại giao dịch
+              <select name="type">
+                <option value="income">Thu</option>
+                <option value="expense">Chi</option>
+              </select>
+            </label>
+            <label>Danh mục
+              <input type="text" name="category" placeholder="Ví dụ: Bán hàng, Văn phòng phẩm..." required />
+            </label>
+            <label>Số tiền
+              <input type="number" name="amount" min="0" required />
+            </label>
+            <label>Phương thức
+              <input type="text" name="method" placeholder="Tiền mặt, chuyển khoản..." />
+            </label>
+            <label class="full">Lý do/Ghi chú
+              <textarea name="notes" rows="2"></textarea>
+            </label>
+            <div class="form-actions full">
+              <button type="submit" class="primary">Lưu</button>
+              <button type="reset" class="ghost">Xóa form</button>
+            </div>
+          </form>
+        </div>
+        <hr />
+        <div class="card">
+          <header class="section-header">
+            <h3>Báo cáo Thu/Chi</h3>
+            <div class="actions">
+              <input type="month" id="finance-month" />
+              <button id="finance-export" class="secondary">Xuất báo cáo</button>
+            </div>
+          </header>
+          <div id="finance-summary" class="report-result"></div>
+          <table class="data-table" id="finance-table">
+            <thead>
+              <tr>
+                <th>Ngày</th>
+                <th>Loại</th>
+                <th>Danh mục</th>
+                <th>Số tiền</th>
+                <th>Phương thức</th>
+                <th>Ghi chú</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="settings" class="page">
+        <header class="page-header">
+          <h2>Tùy chỉnh &amp; phê duyệt</h2>
+          <p>Dành riêng cho quản trị viên</p>
+        </header>
+        <div class="grid two-columns">
+          <div class="card">
+            <header>
+              <h3>Tùy chỉnh thương hiệu</h3>
+            </header>
+            <form id="branding-form" class="form-grid">
+              <label>Tên hiển thị
+                <input type="text" name="siteName" />
+              </label>
+              <label>Màu chủ đạo
+                <input type="color" name="primaryColor" />
+              </label>
+              <label>Logo
+                <input type="file" name="logo" accept="image/*" />
+              </label>
+              <div class="form-actions full">
+                <button type="submit" class="primary">Cập nhật</button>
+                <button type="button" id="branding-reset" class="ghost">Khôi phục mặc định</button>
+              </div>
+            </form>
+          </div>
+          <div class="card">
+            <header>
+              <h3>Quản lý nhân viên</h3>
+            </header>
+            <form id="staff-form" class="form-grid">
+              <label>Tài khoản
+                <input type="text" name="username" required />
+              </label>
+              <label>Mật khẩu
+                <input type="password" name="password" required />
+              </label>
+              <label>Họ và tên
+                <input type="text" name="fullName" required />
+              </label>
+              <label>Vai trò
+                <select name="role">
+                  <option value="employee">Nhân viên</option>
+                  <option value="admin">Quản trị viên</option>
+                </select>
+              </label>
+              <div class="form-actions full">
+                <button type="submit" class="primary">Thêm / Cập nhật</button>
+                <button type="reset" class="ghost">Xóa form</button>
+              </div>
+            </form>
+            <table class="data-table" id="staff-table">
+              <thead>
+                <tr>
+                  <th>Tài khoản</th>
+                  <th>Họ tên</th>
+                  <th>Vai trò</th>
+                  <th>Hành động</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <header class="section-header">
+            <h3>Yêu cầu phê duyệt</h3>
+            <div class="actions">
+              <button id="clear-approvals" class="ghost">Xóa danh sách</button>
+            </div>
+          </header>
+          <table class="data-table" id="approval-table">
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>Loại</th>
+                <th>Chi tiết</th>
+                <th>Người yêu cầu</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <header>
+            <h3>Tùy chỉnh bố cục trang chủ</h3>
+          </header>
+          <p>Quản trị viên có thể kéo thả để sắp xếp lại các thẻ thống kê trên trang chủ.</p>
+          <button id="toggle-layout-edit" class="secondary">Bật chế độ chỉnh sửa</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <template id="history-modal-template">
+    <div class="modal">
+      <div class="modal-content">
+        <header>
+          <h3>Lịch sử khách hàng</h3>
+          <button class="icon" data-close>&times;</button>
+        </header>
+        <div class="modal-body">
+          <div class="history-section">
+            <h4>Thông tin khách hàng</h4>
+            <div class="history-content" data-customer></div>
+          </div>
+          <div class="history-section">
+            <h4>Lịch sử CSKH</h4>
+            <div class="history-content" data-care></div>
+          </div>
+          <div class="history-section">
+            <h4>Trạng thái hẹn</h4>
+            <div class="history-content" data-status></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="loading-template">
+    <div class="modal">
+      <div class="modal-content small">
+        <div class="spinner"></div>
+        <p>Đang xử lý...</p>
+      </div>
+    </div>
+  </template>
+</body>
+</html>
