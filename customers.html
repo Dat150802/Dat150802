@@ -3,122 +3,161 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KLC – Khách hàng</title>
+  <title>KLC Bến Lức – Quản lý khách hàng</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/brand.css">
-  
-  <style>
-    .nav-item{ display:block; padding:.6rem .8rem; border-radius:.75rem; color:#e5e7eb; }
-    .nav-item:hover{ background:rgba(255,255,255,.08); }
-    .mn{ display:flex; align-items:center; justify-content:center; height:42px; border-radius:.75rem; background:#111827; color:#e5e7eb; }
-  </style>
 </head>
-<body class="bg-gray-50">
-<div id="app-loading"></div>
-<div id="toast-stack"></div>
+<body class="bg-slate-100">
+<div id="app-loading" class="flex"></div>
+<div id="toast-stack" class="fixed top-6 right-6 flex flex-col items-end"></div>
 
-<header id="app-header" class="bg-brand-blue text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40"></header>
-<div class="flex">
-  <aside id="app-sidebar" class="hidden md:block w-64 min-h-[calc(100vh-56px)] bg-[#0b265a] text-white"></aside>
-  <main class="flex-1 p-4">
-    <h1 class="text-2xl font-bold mb-4 text-brand-blue">Khách hàng – Form & Danh sách</h1>
+<div class="app-shell md:flex">
+  <aside id="app-sidebar" class="app-sidebar"></aside>
+  <div class="flex-1 min-h-screen flex flex-col">
+    <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
+    <main class="flex-1 p-4 md:p-6 space-y-6">
+      <section class="card p-5">
+        <div class="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <div class="section-title">Thông tin khách hàng</div>
+            <p class="text-sm text-slate-500">Nhập dữ liệu khách hàng mới và theo dõi trạng thái mua hàng.</p>
+            <p id="staff-view-only" class="hidden text-sm text-amber-600 font-semibold mt-2">Bạn đang đăng nhập với quyền nhân viên: được nhập và cập nhật dữ liệu, mọi yêu cầu xóa sẽ gửi đến quản trị viên duyệt.</p>
+          </div>
+        </div>
+        <form id="customer-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Ngày tạo</span>
+            <input type="date" name="date" class="input-brand" required>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Tên khách</span>
+            <input type="text" name="name" class="input-brand" required>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Số điện thoại</span>
+            <input type="tel" name="phone" class="input-brand" required>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Địa chỉ</span>
+            <input type="text" name="address" class="input-brand">
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Nguồn khách</span>
+            <select id="customer-source" name="source" class="input-brand" required>
+              <option value="store">Khách ghé cửa hàng</option>
+              <option value="online">Khách online</option>
+              <option value="old_ref">Khách cũ giới thiệu</option>
+              <option value="old_repeat">Khách cũ mua lại</option>
+              <option value="staff_ref">Người quen nhân viên</option>
+              <option value="other">Nguồn khác</option>
+            </select>
+          </label>
+          <label id="source-detail-wrapper" class="flex flex-col">
+            <span class="text-xs text-slate-500">Chi tiết nguồn</span>
+            <input type="text" id="customer-source-detail" name="sourceDetail" class="input-brand" placeholder="Chi tiết nguồn">
+          </label>
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="customer-purchased" class="h-5 w-5">
+            <label for="customer-purchased" class="text-sm font-medium text-slate-600">Khách đã mua?</label>
+          </div>
+        </form>
+        <div id="purchased-fields" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 hidden">
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Mẫu ghế đã mua</span>
+            <input type="text" name="purchasedModel" form="customer-form" class="input-brand">
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Giá tiền</span>
+            <input type="text" name="purchasedPrice" form="customer-form" class="input-brand">
+          </label>
+        </div>
+        <div id="pending-fields" class="grid grid-cols-1 gap-4 mt-4">
+          <div>
+            <div class="text-sm font-semibold text-slate-600 mb-2">Khách chưa mua – ghi nhận tư vấn</div>
+            <div id="consulted-container"></div>
+            <button id="btn-add-consulted" class="mt-2 px-4 py-2 rounded-lg border border-dashed border-brand-blue text-brand-blue">Thêm mẫu ghế đã tư vấn</button>
+          </div>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Ghi chú tư vấn</span>
+            <textarea name="consultedNote" form="customer-form" class="input-brand" rows="3"></textarea>
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Thông tin trả góp / đề xuất</span>
+            <textarea name="installment" form="customer-form" class="input-brand" rows="2"></textarea>
+          </label>
+        </div>
+        <label class="flex flex-col mt-4">
+          <span class="text-xs text-slate-500">Ghi chú chung</span>
+          <textarea name="notes" form="customer-form" class="input-brand" rows="3"></textarea>
+        </label>
+        <div id="form-actions" class="flex gap-3 mt-4">
+          <button form="customer-form" type="submit" class="btn-brand px-6 py-2.5">Lưu khách hàng</button>
+          <button type="button" id="btn-reset-form" class="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-600">Xóa form</button>
+        </div>
+      </section>
 
-<!-- Form -->
-<div class="p-4 rounded-2xl bg-white shadow border">
-  <form id="customer-form" onsubmit="return false" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <label class="block">
-      <span class="text-sm font-medium">Ngày</span>
-      <input id="f-date" type="date" class="mt-1 px-3 py-2 border rounded w-full">
-    </label>
-    <label class="block">
-      <span class="text-sm font-medium">Tên</span>
-      <input id="f-name" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Tên khách">
-    </label>
-    <label class="block">
-      <span class="text-sm font-medium">Số điện thoại</span>
-      <input id="f-phone" class="mt-1 px-3 py-2 border rounded w-full" placeholder="0xxxxxxxxx">
-    </label>
-    <label class="block">
-      <span class="text-sm font-medium">Địa chỉ</span>
-      <input id="f-address" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Địa chỉ">
-    </label>
-    <label class="block">
-      <span class="text-sm font-medium">Nguồn khách</span>
-      <select id="f-source" class="mt-1 px-3 py-2 border rounded w-full">
-        <option>Khách ghé ngang</option>
-        <option>Khách online</option>
-        <option>Khách cũ giới thiệu</option>
-        <option>Khách cũ mua lại</option>
-        <option>Người quen nhân viên</option>
-        <option>Khác</option>
-      </select>
-    </label>
-    <div id="f-source-detail-wrap" class="block hidden">
-      <span class="text-sm font-medium">Chi tiết nguồn</span>
-      <input id="f-source-detail" class="mt-1 px-3 py-2 border rounded w-full" placeholder="Chi tiết">
-    </div>
-    <label class="block">
-      <span class="text-sm font-medium">Tình trạng</span>
-      <label class="inline-flex items-center gap-2 ml-2">
-        <input id="f-purchased" type="checkbox"> Đã mua
-      </label>
-    </label>
-    <div id="f-model-wrap" class="block hidden">
-      <span class="text-sm font-medium">Mẫu ghế & Giá</span>
-      <div class="grid grid-cols-2 gap-2">
-        <input id="f-model" class="px-3 py-2 border rounded" placeholder="VD: KY02">
-        <input id="f-price" type="number" class="px-3 py-2 border rounded" placeholder="Giá (VNĐ)">
-      </div>
-    </div>
-    <div id="f-consults-wrap" class="block hidden col-span-2">
-      <div class="flex items-center justify-between">
-        <span class="text-sm font-medium">Đã tư vấn (có thể nhiều dòng)</span>
-        <button id="add-consult" type="button" class="px-3 py-1.5 rounded bg-brand-blue text-white text-sm">+ Thêm dòng</button>
-      </div>
-      <div id="consults-list" class="mt-2 space-y-2"></div>
-    </div>
-    <label class="block col-span-2">
-      <span class="text-sm font-medium">Ghi chú</span>
-      <textarea id="f-note" class="mt-1 px-3 py-2 border rounded w-full" rows="2"></textarea>
-    </label>
-    <div class="col-span-2 flex gap-3">
-      <button id="btn-save" type="button" class="px-4 py-2 rounded-xl bg-brand-gold text-black font-semibold">Lưu</button>
-      <button id="btn-reset" type="button" class="px-4 py-2 rounded-xl bg-gray-100">Xoá form</button>
-    </div>
-  </form>
-</div>
+      <div class="separator"></div>
 
-<hr class="my-6 border-dashed">
-
-<!-- List & Filters -->
-<div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-  <input id="search" class="px-3 py-2 border rounded w-full md:w-80" placeholder="Tìm tên/SĐT/địa chỉ">
-  <div class="flex gap-2">
-    <select id="filter-status" class="px-3 py-2 border rounded">
-      <option value="all">Tất cả</option>
-      <option value="purchased">Đã mua</option>
-      <option value="not">Chưa mua</option>
-    </select>
-    <select id="filter-source" class="px-3 py-2 border rounded">
-      <option value="all">Mọi nguồn</option>
-      <option>Khách ghé ngang</option>
-      <option>Khách online</option>
-      <option>Khách cũ giới thiệu</option>
-      <option>Khách cũ mua lại</option>
-      <option>Người quen nhân viên</option>
-      <option>Khác</option>
-    </select>
+      <section class="space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div class="section-title">Danh sách khách hàng</div>
+          <input id="customer-search" class="search-input w-full md:w-80" placeholder="Tìm kiếm theo tên, số điện thoại, nguồn">
+        </div>
+        <div class="card p-0">
+          <div class="table-scroll">
+            <table class="min-w-full text-sm">
+              <thead class="table-brand">
+                <tr>
+                  <th class="px-3 py-3 text-left">Tên khách</th>
+                  <th class="px-3 py-3 text-left">Số điện thoại</th>
+                  <th class="px-3 py-3 text-left">Ngày</th>
+                  <th class="px-3 py-3 text-left">Nguồn</th>
+                  <th class="px-3 py-3 text-left">Trạng thái</th>
+                  <th class="px-3 py-3 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="customer-table-body" class="divide-y"></tbody>
+            </table>
+          </div>
+          <div class="sticky-actions text-sm text-slate-500 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <span>Mục CSKH liên kết trực tiếp với danh sách này.</span>
+            <span>Chọn “Xem lịch sử” để xem đầy đủ thông tin khách.</span>
+            <span>Nhân viên bấm “Xóa” sẽ gửi yêu cầu để quản trị viên duyệt.</span>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
 </div>
 
-<div id="list" class="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
-
-<script type="module">
-  import '../js/modules/customers.js';
-</script>
-
-  </main>
+<div id="customer-detail" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="card max-w-2xl w-full p-6 relative">
+    <button id="close-detail" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600">Đóng</button>
+    <div class="section-title mb-4">Thông tin khách hàng</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+      <div><span class="text-slate-500">Tên:</span> <b data-field="name"></b></div>
+      <div><span class="text-slate-500">SĐT:</span> <b data-field="phone"></b></div>
+      <div><span class="text-slate-500">Địa chỉ:</span> <span data-field="address"></span></div>
+      <div><span class="text-slate-500">Nguồn:</span> <span data-field="source"></span></div>
+      <div><span class="text-slate-500">Trạng thái:</span> <span data-field="status"></span></div>
+      <div><span class="text-slate-500">Ghi chú:</span> <span data-field="notes"></span></div>
+    </div>
+    <div class="separator"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+      <div>
+        <div class="font-semibold text-brand-blue mb-2">Thông tin mua hàng</div>
+        <div data-field="purchasedArea"></div>
+      </div>
+      <div>
+        <div class="font-semibold text-brand-blue mb-2">Lịch sử tư vấn</div>
+        <div data-field="consulted"></div>
+        <div class="mt-2 text-sm text-slate-500">Trả góp / đề xuất: <span data-field="installment"></span></div>
+      </div>
+    </div>
+  </div>
 </div>
-<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 p-2 bg-[#0b265a]"></nav>
+
+<nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-brand-blue flex gap-2 p-2"></nav>
+<script type="module" src="js/customers.js"></script>
 </body>
 </html>
