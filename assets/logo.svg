@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b6f6f" />
+      <stop offset="100%" stop-color="#0a5d5d" />
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="304" height="184" rx="24" fill="url(#grad)" stroke="#c4d7d7" stroke-width="6" />
+  <g fill="#f6ede1" transform="translate(80 60)">
+    <path d="M72 78c-20-8-34-28-34-52 0-12 4-24 11-33C34 5 20 30 20 54c0 22 11 43 29 56 11 8 23 12 34 12 19 0 34-10 34-10s-9 4-20 4c-7 0-15-1-25-6z" opacity="0.85" />
+    <path d="M108 82c-21-4-44-22-44-52 0-11 3-21 7-29-15 10-26 29-26 50 0 32 27 58 60 58 12 0 22-3 31-8-9 1-18 1-28-1z" opacity="0.7" />
+  </g>
+  <text x="190" y="120" text-anchor="middle" font-family="'Inter', Arial, sans-serif" font-size="72" font-weight="700" fill="#f6ede1">KLC</text>
+</svg>
