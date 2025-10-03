@@ -9,17 +9,20 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
 </head>
 <body class="bg-slate-100">
-<div id="app-loading" class="flex"></div>
-<div id="toast-stack" class="fixed top-6 right-6 flex flex-col items-end"></div>
-<nav id="app-mobile-nav" class="md:hidden bg-brand-blue"></nav>
+  <div id="app-loading" class="flex"></div>
+  <div id="toast-stack" class="fixed top-6 right-6 flex flex-col items-end"></div>
 
-<div class="app-shell md:flex">
-  <aside id="app-sidebar" class="app-sidebar"></aside>
-  <div class="flex-1 min-h-screen flex flex-col">
-    <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
-    <main id="page-content" class="flex-1 p-4 md:p-6 space-y-6"></main>
+  <div class="app-shell md:flex">
+    <aside id="app-sidebar" class="app-sidebar"></aside>
+    <div class="flex-1 min-h-screen flex flex-col">
+      <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
+      <main id="page-content" class="flex-1 p-4 md:p-6 space-y-6"></main>
+    </div>
   </div>
-</div>
-<script type="module" src="js/dashboard.js"></script>
+
+  <!-- Mobile bottom nav (hiển thị trên màn hình nhỏ) -->
+  <nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-brand-blue flex gap-2 p-2"></nav>
+
+  <script type="module" src="js/dashboard.js"></script>
 </body>
 </html>

@@ -20,23 +20,24 @@ import {
 } from './core/storage.js';
 import { getDeletionRequests, resolveDeletionRequest } from './core/deletion.js';
 
-const user=initApp('system');
+const user = initApp('system');
 ensureAdminUserList();
 bindUserActions();
 
-const isAdmin=user.role==='admin';
-const form=document.getElementById('user-form');
-const resetBtn=document.getElementById('user-reset');
-const syncForm=document.getElementById('sync-form');
-const syncSaveBtn=document.getElementById('sync-save');
-const syncTestBtn=document.getElementById('sync-test');
-const syncNowBtn=document.getElementById('sync-now');
-const syncStatusLabel=document.getElementById('sync-status-label');
-const syncLastPush=document.getElementById('sync-last-push');
-const syncLastPull=document.getElementById('sync-last-pull');
-const syncError=document.getElementById('sync-error');
-const syncEndpointDisplay=document.getElementById('sync-endpoint-display');
-const syncCopyBtn=document.getElementById('sync-copy');
+const isAdmin = user.role === 'admin';
+const form = document.getElementById('user-form');
+const resetBtn = document.getElementById('user-reset');
+
+const syncForm = document.getElementById('sync-form');
+const syncSaveBtn = document.getElementById('sync-save');
+const syncTestBtn = document.getElementById('sync-test');
+const syncNowBtn = document.getElementById('sync-now');
+const syncStatusLabel = document.getElementById('sync-status-label');
+const syncLastPush = document.getElementById('sync-last-push');
+const syncLastPull = document.getElementById('sync-last-pull');
+const syncError = document.getElementById('sync-error');
+const syncEndpointDisplay = document.getElementById('sync-endpoint-display');
+const syncCopyBtn = document.getElementById('sync-copy');
 
 if(!isAdmin){
   document.getElementById('system-form-wrapper').classList.add('hidden');

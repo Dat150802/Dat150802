@@ -7,143 +7,160 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/brand.css">
 </head>
-<body class="bg-slate-100">
-<div id="app-loading" class="flex"></div>
-<div id="toast-stack" class="fixed top-6 right-6 flex flex-col items-end"></div>
-<nav id="app-mobile-nav" class="md:hidden bg-brand-blue"></nav>
+<body class="bg-slate-100 has-mobile-nav">
+  <div id="app-loading" class="flex"></div>
+  <div id="toast-stack" class="fixed top-6 right-6 flex flex-col items-end"></div>
 
-<div class="app-shell md:flex">
-  <aside id="app-sidebar" class="app-sidebar"></aside>
-  <div class="flex-1 min-h-screen flex flex-col">
-    <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
-    <main class="flex-1 p-4 md:p-6 space-y-6">
-      <section class="card p-5 space-y-4">
-        <div class="section-title">Ghi nhận chăm sóc khách hàng</div>
-        <p class="text-sm text-slate-500">Lưu lại lịch sử tương tác với khách để tiện theo dõi. Nhân viên có thể nhập dữ liệu và gửi yêu cầu xóa khi cần.</p>
-        <p id="care-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang đăng nhập với quyền nhân viên: có thể cập nhật CSKH, khi xóa vui lòng giải thích rõ để quản trị viên duyệt.</p>
-        <form id="care-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label class="flex flex-col">
-            <span class="text-xs text-slate-500">Ngày CSKH</span>
-            <input type="date" name="date" class="input-brand" required>
-          </label>
-          <label class="flex flex-col">
-            <span class="text-xs text-slate-500">Tên khách</span>
-            <input list="customers-name-list" type="text" name="name" class="input-brand" required>
-            <datalist id="customers-name-list"></datalist>
-          </label>
-          <label class="flex flex-col">
-            <span class="text-xs text-slate-500">Số điện thoại</span>
-            <input list="customers-phone-list" type="tel" name="phone" class="input-brand" required>
-            <datalist id="customers-phone-list"></datalist>
-          </label>
-          <label class="flex flex-col">
-            <span class="text-xs text-slate-500">Địa chỉ</span>
-            <input type="text" name="address" class="input-brand">
-          </label>
-          <label class="flex flex-col">
-            <span class="text-xs text-slate-500">Nhân viên phụ trách</span>
-            <select name="staff" class="input-brand" required>
-              <option value="Đạt">Đạt</option>
-              <option value="Huỳnh">Huỳnh</option>
-            </select>
-          </label>
-          <label class="flex flex-col">
-            <span class="text-xs text-slate-500">Hình thức CSKH</span>
-            <select name="channel" class="input-brand" required>
-              <option value="Gọi điện">Gọi điện</option>
-              <option value="Nhắn tin">Nhắn tin</option>
-              <option value="Gửi tin hàng loạt">Gửi tin nhắn hàng loạt</option>
-              <option value="Gọi + Nhắn tin">Gọi điện + Nhắn tin</option>
-            </select>
-          </label>
-          <label class="flex flex-col md:col-span-2">
-            <span class="text-xs text-slate-500">Nội dung CSKH</span>
-            <textarea name="content" class="input-brand" rows="3"></textarea>
-          </label>
-          <label class="flex flex-col md:col-span-2">
-            <span class="text-xs text-slate-500">Phản hồi khách hàng</span>
-            <textarea name="feedback" class="input-brand" rows="3"></textarea>
-          </label>
-          <label class="flex flex-col md:col-span-2">
-            <span class="text-xs text-slate-500">Ghi chú thêm</span>
-            <textarea name="note" class="input-brand" rows="2"></textarea>
-          </label>
-          <div class="md:col-span-2">
-            <div class="text-sm font-semibold text-slate-600 mb-2">Đánh giá khách hàng</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <label class="inline-flex items-center gap-2"><input type="radio" name="careRating" value="potential" class="h-4 w-4" checked> Khách còn tiềm năng</label>
-              <label class="inline-flex items-center gap-2"><input type="radio" name="careRating" value="nurturing" class="h-4 w-4"> Đang nuôi khách</label>
-              <label class="inline-flex items-center gap-2"><input type="radio" name="careRating" value="appointment" class="h-4 w-4"> Đang hẹn lên</label>
-              <label class="inline-flex items-center gap-2"><input type="radio" name="careRating" value="lost" class="h-4 w-4"> Hết tiềm năng</label>
+  <!-- Mobile top nav (giữ phiên bản cố định trên đầu) -->
+  <nav id="app-mobile-nav" class="md:hidden bg-brand-blue"></nav>
+
+  <div class="app-shell md:flex">
+    <aside id="app-sidebar" class="app-sidebar"></aside>
+    <div class="flex-1 min-h-screen flex flex-col">
+      <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
+      <main class="flex-1 p-4 md:p-6 space-y-6">
+        <section class="card p-5 space-y-4">
+          <div class="section-title">Ghi nhận chăm sóc khách hàng</div>
+          <p class="text-sm text-slate-500">Lưu lại lịch sử tương tác với khách để tiện theo dõi. Nhân viên có thể nhập dữ liệu và gửi yêu cầu xóa khi cần.</p>
+          <p id="care-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang đăng nhập với quyền nhân viên: có thể cập nhật CSKH, khi xóa vui lòng giải thích rõ để quản trị viên duyệt.</p>
+
+          <form id="care-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="flex flex-col">
+              <span class="text-xs text-slate-500">Ngày CSKH</span>
+              <input type="date" name="date" class="input-brand" required>
+            </label>
+            <label class="flex flex-col">
+              <span class="text-xs text-slate-500">Tên khách</span>
+              <input list="customers-name-list" type="text" name="name" class="input-brand" required>
+              <datalist id="customers-name-list"></datalist>
+            </label>
+            <label class="flex flex-col">
+              <span class="text-xs text-slate-500">Số điện thoại</span>
+              <input list="customers-phone-list" type="tel" name="phone" class="input-brand" required>
+              <datalist id="customers-phone-list"></datalist>
+            </label>
+            <label class="flex flex-col">
+              <span class="text-xs text-slate-500">Địa chỉ</span>
+              <input type="text" name="address" class="input-brand">
+            </label>
+            <label class="flex flex-col">
+              <span class="text-xs text-slate-500">Nhân viên phụ trách</span>
+              <select name="staff" class="input-brand" required>
+                <option value="Đạt">Đạt</option>
+                <option value="Huỳnh">Huỳnh</option>
+              </select>
+            </label>
+            <label class="flex flex-col">
+              <span class="text-xs text-slate-500">Hình thức CSKH</span>
+              <select name="channel" class="input-brand" required>
+                <option value="Gọi điện">Gọi điện</option>
+                <option value="Nhắn tin">Nhắn tin</option>
+                <option value="Gửi tin hàng loạt">Gửi tin nhắn hàng loạt</option>
+                <option value="Gọi + Nhắn tin">Gọi điện + Nhắn tin</option>
+              </select>
+            </label>
+            <label class="flex flex-col md:col-span-2">
+              <span class="text-xs text-slate-500">Nội dung CSKH</span>
+              <textarea name="content" class="input-brand" rows="3"></textarea>
+            </label>
+            <label class="flex flex-col md:col-span-2">
+              <span class="text-xs text-slate-500">Phản hồi khách hàng</span>
+              <textarea name="feedback" class="input-brand" rows="3"></textarea>
+            </label>
+            <label class="flex flex-col md:col-span-2">
+              <span class="text-xs text-slate-500">Ghi chú thêm</span>
+              <textarea name="note" class="input-brand" rows="2"></textarea>
+            </label>
+            <div class="md:col-span-2">
+              <div class="text-sm font-semibold text-slate-600 mb-2">Đánh giá khách hàng</div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <label class="inline-flex items-center gap-2">
+                  <input type="radio" name="careRating" value="potential" class="h-4 w-4" checked> Khách còn tiềm năng
+                </label>
+                <label class="inline-flex items-center gap-2">
+                  <input type="radio" name="careRating" value="nurturing" class="h-4 w-4"> Đang nuôi khách
+                </label>
+                <label class="inline-flex items-center gap-2">
+                  <input type="radio" name="careRating" value="appointment" class="h-4 w-4"> Đang hẹn lên
+                </label>
+                <label class="inline-flex items-center gap-2">
+                  <input type="radio" name="careRating" value="lost" class="h-4 w-4"> Hết tiềm năng
+                </label>
+              </div>
+            </div>
+            <label id="rating-reason-row" class="flex flex-col md:col-span-2 hidden">
+              <span class="text-xs text-slate-500">Lý do hết tiềm năng</span>
+              <textarea name="ratingReason" class="input-brand" rows="2"></textarea>
+            </label>
+          </form>
+
+          <div id="care-form-actions" class="flex gap-3">
+            <button type="submit" form="care-form" class="btn-brand px-6 py-2.5">Lưu lịch sử</button>
+            <button type="button" id="care-reset" class="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-600">Xóa form</button>
+          </div>
+        </section>
+
+        <section class="space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div class="section-title">Danh sách chăm sóc khách hàng</div>
+            <input id="care-search" class="search-input w-full md:w-80" placeholder="Tìm theo tên, SĐT, nhân viên, trạng thái">
+          </div>
+          <div class="card p-0">
+            <div class="table-scroll">
+              <table class="min-w-full text-sm">
+                <thead class="table-brand">
+                  <tr>
+                    <th class="px-3 py-3 text-left">Ngày</th>
+                    <th class="px-3 py-3 text-left">Khách hàng</th>
+                    <th class="px-3 py-3 text-left">Số điện thoại</th>
+                    <th class="px-3 py-3 text-left">Nhân viên</th>
+                    <th class="px-3 py-3 text-left">Hình thức</th>
+                    <th class="px-3 py-3 text-left">Đánh giá</th>
+                    <th class="px-3 py-3 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="care-table-body" class="divide-y"></tbody>
+              </table>
+            </div>
+            <div class="sticky-actions text-sm text-slate-500">
+              Nhấn “Xóa” để gửi yêu cầu duyệt (nhân viên) hoặc xóa ngay (quản trị viên).
             </div>
           </div>
-          <label id="rating-reason-row" class="flex flex-col md:col-span-2 hidden">
-            <span class="text-xs text-slate-500">Lý do hết tiềm năng</span>
-            <textarea name="ratingReason" class="input-brand" rows="2"></textarea>
-          </label>
-        </form>
-        <div id="care-form-actions" class="flex gap-3">
-          <button type="submit" form="care-form" class="btn-brand px-6 py-2.5">Lưu lịch sử</button>
-          <button type="button" id="care-reset" class="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-600">Xóa form</button>
-        </div>
-      </section>
+        </section>
 
-      <section class="space-y-4">
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div class="section-title">Danh sách chăm sóc khách hàng</div>
-          <input id="care-search" class="search-input w-full md:w-80" placeholder="Tìm theo tên, SĐT, nhân viên, trạng thái">
-        </div>
-        <div class="card p-0">
-          <div class="table-scroll">
-            <table class="min-w-full text-sm">
-              <thead class="table-brand">
-                <tr>
-                  <th class="px-3 py-3 text-left">Ngày</th>
-                  <th class="px-3 py-3 text-left">Khách hàng</th>
-                  <th class="px-3 py-3 text-left">Số điện thoại</th>
-                  <th class="px-3 py-3 text-left">Nhân viên</th>
-                  <th class="px-3 py-3 text-left">Hình thức</th>
-                  <th class="px-3 py-3 text-left">Đánh giá</th>
-                  <th class="px-3 py-3 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody id="care-table-body" class="divide-y"></tbody>
-            </table>
+        <!-- Giữ lại phần Dòng thời gian -->
+        <section class="card p-5 space-y-4">
+          <div>
+            <div class="section-title">Dòng thời gian khách hàng & CSKH</div>
+            <p class="text-sm text-slate-500">Tổng hợp hoạt động tạo khách hàng, chăm sóc và cập nhật trạng thái từ tất cả các phân hệ.</p>
           </div>
-          <div class="sticky-actions text-sm text-slate-500">Nhấn “Xóa” để gửi yêu cầu duyệt (nhân viên) hoặc xóa ngay (quản trị viên).</div>
-        </div>
-      </section>
-
-      <section class="card p-5 space-y-4">
-        <div>
-          <div class="section-title">Dòng thời gian khách hàng & CSKH</div>
-          <p class="text-sm text-slate-500">Tổng hợp hoạt động tạo khách hàng, chăm sóc và cập nhật trạng thái từ tất cả các phân hệ.</p>
-        </div>
-        <div id="care-activity" class="space-y-3 max-h-[480px] overflow-y-auto pr-2 text-sm"></div>
-      </section>
-    </main>
-  </div>
-</div>
-
-<div id="care-detail" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-  <div class="card max-w-2xl w-full p-6 relative space-y-4">
-    <button id="care-detail-close" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600">Đóng</button>
-    <div class="section-title">Chi tiết CSKH</div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-      <div><span class="text-slate-500">Ngày:</span> <span data-field="date"></span></div>
-      <div><span class="text-slate-500">Nhân viên:</span> <span data-field="staff"></span></div>
-      <div><span class="text-slate-500">Khách hàng:</span> <b data-field="name"></b></div>
-      <div><span class="text-slate-500">Số điện thoại:</span> <span data-field="phone"></span></div>
-      <div><span class="text-slate-500">Hình thức:</span> <span data-field="channel"></span></div>
-      <div><span class="text-slate-500">Đánh giá:</span> <span data-field="rating"></span></div>
-      <div><span class="text-slate-500">Lý do:</span> <span data-field="reason"></span></div>
+          <div id="care-activity" class="space-y-3 max-h-[480px] overflow-y-auto pr-2 text-sm"></div>
+        </section>
+      </main>
     </div>
-    <div class="text-sm text-slate-600"><span class="font-semibold">Nội dung:</span> <span data-field="content"></span></div>
-    <div class="text-sm text-slate-600"><span class="font-semibold">Phản hồi:</span> <span data-field="feedback"></span></div>
-    <div class="text-sm text-slate-600"><span class="font-semibold">Ghi chú:</span> <span data-field="note"></span></div>
   </div>
-</div>
 
-<script type="module" src="js/care.js"></script>
+  <!-- Modal chi tiết -->
+  <div id="care-detail" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="card max-w-2xl w-full p-6 relative space-y-4">
+      <button id="care-detail-close" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600">Đóng</button>
+      <div class="section-title">Chi tiết CSKH</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+        <div><span class="text-slate-500">Ngày:</span> <span data-field="date"></span></div>
+        <div><span class="text-slate-500">Nhân viên:</span> <span data-field="staff"></span></div>
+        <div><span class="text-slate-500">Khách hàng:</span> <b data-field="name"></b></div>
+        <div><span class="text-slate-500">Số điện thoại:</span> <span data-field="phone"></span></div>
+        <div><span class="text-slate-500">Hình thức:</span> <span data-field="channel"></span></div>
+        <div><span class="text-slate-500">Đánh giá:</span> <span data-field="rating"></span></div>
+        <div><span class="text-slate-500">Lý do:</span> <span data-field="reason"></span></div>
+      </div>
+      <div class="text-sm text-slate-600"><span class="font-semibold">Nội dung:</span> <span data-field="content"></span></div>
+      <div class="text-sm text-slate-600"><span class="font-semibold">Phản hồi:</span> <span data-field="feedback"></span></div>
+      <div class="text-sm text-slate-600"><span class="font-semibold">Ghi chú:</span> <span data-field="note"></span></div>
+    </div>
+  </div>
+
+  <!-- Chỉ giữ 1 nav (top). Bỏ phiên bản bottom nav để tránh trùng ID. -->
+  <script type="module" src="js/care.js"></script>
 </body>
 </html>
