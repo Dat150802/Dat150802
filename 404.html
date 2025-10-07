@@ -1,26 +1,91 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a//dev/null b/404.html
-index 0000000000000000000000000000000000000000..f4b26361b73c42cbb1195b2d2f5271e94d0dd9f4 100644
---- a//dev/null
-+++ b/404.html
-@@ -0,0 +1,17 @@
-+<!DOCTYPE html>
-+<html lang="vi">
-+<head>
-+  <meta charset="UTF-8">
-+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-+  <title>Không tìm thấy trang – KLC Bến Lức</title>
-+  <script src="https://cdn.tailwindcss.com"></script>
-+  <link rel="stylesheet" href="assets/css/brand.css">
-+</head>
-+<body class="min-h-screen bg-slate-100 flex items-center justify-center">
-+  <div class="card p-10 text-center space-y-4 max-w-md">
-+    <h1 class="text-3xl font-bold text-brand-blue">404</h1>
-+    <p class="text-sm text-slate-600">Trang bạn truy cập không tồn tại. Vui lòng quay lại trang đăng nhập.</p>
-+    <a href="index.html" class="btn-primary inline-block">Về trang chủ</a>
-+  </div>
-+</body>
-+</html>
- 
-EOF
-)
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Không tìm thấy trang | KLC Bến Lức</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --primary: #0d7474;
+      --primary-dark: #095656;
+      --text: #1a2b2b;
+      --muted: #5f7a7a;
+      --bg: #f5fbfb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      padding: 2rem 1.5rem;
+    }
+
+    .error-card {
+      max-width: 420px;
+      width: 100%;
+      background: #fff;
+      border-radius: 20px;
+      padding: 2.5rem 2rem;
+      box-shadow: 0 20px 40px -32px rgba(13, 116, 116, 0.45);
+      text-align: center;
+    }
+
+    .error-card img {
+      width: 80px;
+      margin: 0 auto 1.5rem;
+      display: block;
+    }
+
+    .error-card h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+      color: var(--primary);
+    }
+
+    .error-card p {
+      margin: 0 0 1.5rem 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .error-card a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.75rem;
+      border-radius: 14px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .error-card a:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+  <main class="error-card">
+    <img src="assets/logo.svg" alt="Logo KLC Bến Lức" />
+    <h1>404</h1>
+    <p>Trang bạn truy cập không tồn tại hoặc đã được di chuyển. Vui lòng quay lại trang chính để tiếp tục làm việc.</p>
+    <a href="index.html">Về trang chủ</a>
+  </main>
+</body>
+</html>
