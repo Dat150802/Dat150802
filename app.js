@@ -1386,13 +1386,31 @@ function handleStaffSubmit(evt) {
   }
   withLoading('Đang lưu nhân sự...', () => {
     const data = Object.fromEntries(new FormData(evt.target));
-    const existing = state.users.find(u => u.username === data.username);
+    const username = (data.username || '').trim();
+    if (!username) {
+      showToast('Vui lòng nhập tài khoản hợp lệ', true);
+      return;
+    }
+    if (!data.password) {
+      showToast('Vui lòng nhập mật khẩu', true);
+      return;
+    }
+    const existing = state.users.find(u => u.username === username);
+    const timestamp = new Date().toISOString();
     if (existing) {
       existing.password = data.password;
-      existing.fullName = data.fullName;
+      existing.fullName = data.fullName || username;
       existing.role = data.role;
+      existing.updatedAt = timestamp;
     } else {
-      state.users.push({ ...data });
+      state.users.push({
+        username,
+        password: data.password,
+        fullName: data.fullName || username,
+        role: data.role,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      });
     }
     saveState();
     evt.target.reset();
@@ -1620,7 +1638,13 @@ async function pushRemoteState({ reason = 'auto' } = {}) {
   remoteSyncInFlight = true;
   const config = state.sync;
   try {
-    const payload = prepareStateForTransport();
+    let payload = prepareStateForTransport();
+    try {
+      const remoteSnapshot = await fetchRemoteState();
+      payload = mergeStateSnapshots(payload, remoteSnapshot);
+    } catch (mergeError) {
+      console.warn('Không thể hợp nhất dữ liệu từ máy chủ, sử dụng dữ liệu cục bộ', mergeError);
+    }
     const response = await fetch(config.remoteUrl, {
       method: (config.method ?? 'PUT').toUpperCase(),
       headers: buildSyncHeaders({ includeJson: true }),
@@ -1656,24 +1680,11 @@ async function pushRemoteState({ reason = 'auto' } = {}) {
 
 async function pullRemoteState({ silent = false } = {}) {
   if (!isRemoteSyncEnabled()) return false;
-  const config = state.sync;
   try {
-    const response = await fetch(config.remoteUrl, {
-      method: 'GET',
-      headers: buildSyncHeaders(),
-      cache: 'no-store'
-    });
-    if (!response.ok) {
-      throw new Error(`Máy chủ trả về mã ${response.status}`);
-    }
-    const payload = await response.json();
-    const remoteState = payload?.data ?? payload?.state ?? payload;
-    if (!remoteState || typeof remoteState !== 'object') {
-      throw new Error('Dữ liệu phản hồi không hợp lệ');
-    }
-    const normalizedRemote = normalizeIncomingState(remoteState);
-    const hasChanged = stateFingerprint(normalizedRemote) !== stateFingerprint(state);
-    state = normalizedRemote;
+    const remoteState = await fetchRemoteState();
+    const merged = mergeStateSnapshots(state, remoteState);
+    const hasChanged = stateFingerprint(merged) !== stateFingerprint(state);
+    state = merged;
     state.sync.lastPull = new Date().toISOString();
     state.sync.lastError = null;
     saveState({ skipRemote: true });
@@ -1697,6 +1708,24 @@ async function pullRemoteState({ silent = false } = {}) {
     console.error('Không thể lấy dữ liệu từ máy chủ đồng bộ', error);
     return false;
   }
+}
+
+async function fetchRemoteState() {
+  const config = state.sync;
+  const response = await fetch(config.remoteUrl, {
+    method: 'GET',
+    headers: buildSyncHeaders(),
+    cache: 'no-store'
+  });
+  if (!response.ok) {
+    throw new Error(`Máy chủ trả về mã ${response.status}`);
+  }
+  const payload = await response.json();
+  const remoteState = payload?.data ?? payload?.state ?? payload;
+  if (!remoteState || typeof remoteState !== 'object') {
+    throw new Error('Dữ liệu phản hồi không hợp lệ');
+  }
+  return remoteState;
 }
 
 function startRemotePolling() {
@@ -1740,6 +1769,90 @@ function normalizeIncomingState(nextState) {
       method: (incomingSync.method ?? localSync.method ?? 'PUT').toUpperCase()
     }
   };
+}
+
+function mergeStateSnapshots(primarySnapshot, secondarySnapshot) {
+  const primary = ensureStateIntegrity(primarySnapshot);
+  const secondary = ensureStateIntegrity(secondarySnapshot);
+  const merged = {
+    ...primary,
+    ...secondary,
+    users: normalizeUsers(
+      [...primary.users, ...secondary.users],
+      defaultState().users
+    ),
+    customers: mergeCollections(primary.customers, secondary.customers),
+    care: mergeCollections(primary.care, secondary.care),
+    warranties: mergeCollections(primary.warranties, secondary.warranties),
+    maintenances: mergeCollections(primary.maintenances, secondary.maintenances),
+    inventory: mergeCollections(primary.inventory, secondary.inventory),
+    finance: mergeCollections(primary.finance, secondary.finance),
+    approvals: mergeCollections(primary.approvals, secondary.approvals),
+    tasks: {
+      templates: mergeTaskTemplates(primary.tasks.templates, secondary.tasks.templates),
+      reports: mergeTaskReports(primary.tasks.reports, secondary.tasks.reports)
+    },
+    sync: mergeSyncConfig(primary.sync, secondary.sync)
+  };
+  return ensureStateIntegrity(merged);
+}
+
+function mergeCollections(primary = [], secondary = []) {
+  return normalizeCollection([...primary, ...secondary], []);
+}
+
+function mergeTaskTemplates(primary = [], secondary = []) {
+  return mergeCollections(primary, secondary).map(template => ({
+    ...template,
+    steps: ensureArray(template?.steps),
+    tasks: ensureArray(template?.tasks),
+    checklist: ensureArray(template?.checklist)
+  }));
+}
+
+function mergeTaskReports(primary = [], secondary = []) {
+  return mergeCollections(primary, secondary).map(report => ({
+    ...report,
+    items: ensureArray(report?.items),
+    results: ensureArray(report?.results),
+    tasks: ensureArray(report?.tasks)
+  }));
+}
+
+function mergeSyncConfig(primary = {}, secondary = {}) {
+  const base = defaultState().sync;
+  const normalizedPrimary = { ...base, ...primary };
+  const normalizedSecondary = { ...base, ...secondary };
+  const resolvedEnabled =
+    typeof primary?.enabled === 'boolean'
+      ? primary.enabled
+      : (typeof secondary?.enabled === 'boolean' ? secondary.enabled : base.enabled);
+  return {
+    ...base,
+    ...normalizedSecondary,
+    ...normalizedPrimary,
+    enabled: resolvedEnabled,
+    remoteUrl: normalizedPrimary.remoteUrl || normalizedSecondary.remoteUrl || base.remoteUrl,
+    apiKey: normalizedPrimary.apiKey || normalizedSecondary.apiKey || base.apiKey,
+    method: (normalizedPrimary.method || normalizedSecondary.method || base.method || 'PUT').toUpperCase(),
+    autoPullMinutes:
+      Number(normalizedPrimary.autoPullMinutes) ||
+      Number(normalizedSecondary.autoPullMinutes) ||
+      base.autoPullMinutes,
+    lastPush: maxTimestamp(normalizedPrimary.lastPush, normalizedSecondary.lastPush),
+    lastPull: maxTimestamp(normalizedPrimary.lastPull, normalizedSecondary.lastPull),
+    lastError: normalizedPrimary.lastError || normalizedSecondary.lastError || null
+  };
+}
+
+function maxTimestamp(a, b) {
+  const aTime = Number.isNaN(Date.parse(a ?? '')) ? null : Date.parse(a);
+  const bTime = Number.isNaN(Date.parse(b ?? '')) ? null : Date.parse(b);
+  if (aTime === null && bTime === null) return null;
+  if (aTime !== null && bTime !== null) {
+    return aTime >= bTime ? a : b;
+  }
+  return aTime !== null ? a : b;
 }
 
 function ensureStateIntegrity(snapshot) {
@@ -1815,13 +1928,31 @@ function normalizeUsers(value, fallback = []) {
     if (!user || typeof user !== 'object') return;
     const username = String(user.username || '').trim();
     if (!username) return;
-    map.set(username, {
+    const sanitized = {
       username,
-      password: user.password || '',
-      role: user.role || 'employee',
+      password: String(user.password ?? ''),
+      role: user.role === 'admin' ? 'admin' : 'employee',
       fullName: user.fullName || username,
+      createdAt: user.createdAt || user.updatedAt || new Date().toISOString(),
       updatedAt: user.updatedAt || user.createdAt || new Date().toISOString()
-    });
+    };
+    const existing = map.get(username);
+    if (!existing) {
+      map.set(username, sanitized);
+      return;
+    }
+    const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+    const incomingTime = new Date(sanitized.updatedAt || sanitized.createdAt || 0).getTime();
+    if (incomingTime >= existingTime) {
+      const mergedUser = { ...existing, ...sanitized };
+      if (!sanitized.password) {
+        mergedUser.password = existing.password;
+      }
+      if (!sanitized.createdAt) {
+        mergedUser.createdAt = existing.createdAt;
+      }
+      map.set(username, mergedUser);
+    }
   });
   defaults.forEach(user => {
     const username = String(user.username || '').trim();
