@@ -32,7 +32,13 @@ Giao diện web nội bộ dành cho doanh nghiệp KLC Bến Lức. Toàn bộ 
    - Kéo thả các widget ở Trang chủ khi bật “chế độ chỉnh sửa”.
 
 4. **Đồng bộ & sao lưu**
-   - Dữ liệu lưu trên `localStorage`. Để đồng bộ nhiều thiết bị, quản trị viên xuất báo cáo CSV định kỳ và nhập thủ công khi cần. Có thể tích hợp thêm API hoặc cơ sở dữ liệu khác bằng cách thay thế các hàm đọc/ghi trong `app.js`.
+   - Vào mục **Tùy chỉnh → Sao lưu & đồng bộ dữ liệu** để bật đồng bộ đám mây cho toàn bộ hệ thống.
+   - Điền địa chỉ API đích (REST endpoint hỗ trợ `PUT` hoặc `POST`) và mã bảo mật nếu có. Hệ thống sẽ tự động đẩy dữ liệu khi có thay đổi và kiểm tra dữ liệu mới theo chu kỳ đã cấu hình.
+   - Có thể bấm **Tải dữ liệu về máy này** hoặc **Gửi dữ liệu lên máy chủ** để đồng bộ thủ công bất kỳ lúc nào.
+   - Ngoài ra vẫn có thể **Xuất file sao lưu** (JSON) và **Nhập từ file sao lưu** để chuyển dữ liệu nhanh giữa các thiết bị hoàn toàn ngoại tuyến.
+
+5. **Truy cập nhanh CheckList**
+   - Sử dụng đường dẫn `checklist.html` để vào thẳng module CheckList công việc (vẫn yêu cầu đăng nhập theo phân quyền).
 
 ## Cấu trúc thư mục
 

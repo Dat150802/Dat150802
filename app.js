@@ -1,6 +1,14 @@
 const STORAGE_KEY = 'klc-ben-luc-data-v1';
 const REMEMBER_KEY = 'klc-ben-luc-remember';
 const SESSION_KEY = 'klc-ben-luc-session';
+const CLIENT_ID = crypto.randomUUID();
+const REMOTE_PUSH_DEBOUNCE = 1200;
+
+let remotePushTimer = null;
+let remotePullTimer = null;
+let remoteSyncInFlight = false;
+let pendingRemotePush = false;
+let broadcastChannel = null;
 
 const defaultState = () => ({
   siteName: 'KLC Bến Lức',
@@ -20,7 +28,17 @@ const defaultState = () => ({
   },
   inventory: [],
   finance: [],
-  approvals: []
+  approvals: [],
+  sync: {
+    enabled: false,
+    remoteUrl: '',
+    apiKey: '',
+    method: 'PUT',
+    autoPullMinutes: 5,
+    lastPush: null,
+    lastPull: null,
+    lastError: null
+  }
 });
 
 let state = loadState();
@@ -44,8 +62,14 @@ init();
 
 function init() {
   applyBranding();
+  renderSyncStatus();
+  updateSyncForm();
   attachEventListeners();
-  toggleSourceDetail.call(document.getElementById('customer-source'));
+  setupSyncListeners();
+  const sourceSelect = document.getElementById('customer-source');
+  if (sourceSelect) {
+    toggleSourceDetail.call(sourceSelect);
+  }
   if (currentUser) {
     bootApp();
   } else {
@@ -55,18 +79,68 @@ function init() {
 }
 
 function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultState();
-    return { ...defaultState(), ...JSON.parse(raw) };
-  } catch (error) {
-    console.error('Không thể tải dữ liệu, khởi tạo mặc định', error);
-    return defaultState();
+  const raw = localStorage.getItem(STORAGE_KEY);
+  return parseStoredState(raw);
+}
+
+function saveState(options = {}) {
+  const { skipRemote = false, skipBroadcast = false } = options;
+  state = ensureStateIntegrity(state);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!skipBroadcast) {
+    broadcastState(skipRemote ? 'meta-update' : 'local-change');
+  }
+  if (!skipRemote) {
+    scheduleRemoteSync();
   }
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function parseStoredState(raw) {
+  if (!raw) return ensureStateIntegrity(defaultState());
+  try {
+    const parsed = JSON.parse(raw);
+    return ensureStateIntegrity({ ...defaultState(), ...parsed });
+  } catch (error) {
+    console.error('Không thể tải dữ liệu, khởi tạo mặc định', error);
+    return ensureStateIntegrity(defaultState());
+  }
+}
+
+function handleExternalStateUpdate(raw) {
+  const nextState = raw ? parseStoredState(raw) : ensureStateIntegrity(defaultState());
+  if (stateFingerprint(nextState) === stateFingerprint(state)) return;
+  state = normalizeIncomingState(nextState);
+  applyBranding();
+  renderSyncStatus();
+  updateSyncForm();
+  if (currentUser) {
+    refreshAll();
+    showToast('Dữ liệu đã được đồng bộ từ tài khoản khác');
+  }
+  startRemotePolling();
+  if (isRemoteSyncEnabled()) {
+    pullRemoteState({ silent: true });
+  }
+}
+
+function setupSyncListeners() {
+  window.addEventListener('storage', evt => {
+    if (evt.storageArea !== localStorage) return;
+    if (evt.key === STORAGE_KEY || evt.key === null) {
+      handleExternalStateUpdate(evt.newValue);
+    }
+  });
+
+  if ('BroadcastChannel' in window) {
+    broadcastChannel?.close?.();
+    broadcastChannel = new BroadcastChannel('klc-ben-luc-sync');
+    broadcastChannel.addEventListener('message', evt => {
+      if (!evt?.data || evt.data.source === CLIENT_ID) return;
+      if (evt.data.type === 'state-update') {
+        handleExternalStateUpdate(JSON.stringify(evt.data.payload));
+      }
+    });
+  }
 }
 
 function loadSession() {
@@ -76,6 +150,20 @@ function loadSession() {
     return JSON.parse(raw);
   } catch (error) {
     return null;
+  }
+}
+
+function broadcastState(reason = 'update') {
+  if (!broadcastChannel) return;
+  try {
+    broadcastChannel.postMessage({
+      type: 'state-update',
+      payload: state,
+      reason,
+      source: CLIENT_ID
+    });
+  } catch (error) {
+    console.warn('Không thể phát thông báo đồng bộ nội bộ', error);
   }
 }
 
@@ -94,8 +182,8 @@ function clearSession() {
 }
 
 function attachEventListeners() {
-  document.getElementById('login-form').addEventListener('submit', handleLogin);
-  elements.logoutBtn.addEventListener('click', () => {
+  document.getElementById('login-form')?.addEventListener('submit', handleLogin);
+  elements.logoutBtn?.addEventListener('click', () => {
     withLoading('Đang đăng xuất...', () => {
       clearSession();
       showLogin();
@@ -105,57 +193,98 @@ function attachEventListeners() {
   elements.navLinks.forEach(link => {
     link.addEventListener('click', () => {
       if (!currentUser) return;
-      elements.navLinks.forEach(btn => btn.classList.remove('active'));
-      link.classList.add('active');
-      showPage(link.dataset.target);
+      const target = link.dataset.target;
+      if (target === 'settings' && currentUser.role !== 'admin') {
+        showToast('Bạn không có quyền truy cập mục này', true);
+        return;
+      }
+      if (location.hash !== `#${target}`) {
+        location.hash = target;
+      } else {
+        showPage(target);
+      }
     });
   });
 
-  document.getElementById('customer-form').addEventListener('submit', handleCustomerSubmit);
-  document.getElementById('customer-reset').addEventListener('click', () => showToast('Đã xóa thông tin trong form khách hàng'));
-  document.getElementById('customer-source').addEventListener('change', toggleSourceDetail);
-  document.getElementById('has-purchased').addEventListener('change', togglePurchase);
-  document.getElementById('customer-search').addEventListener('input', renderCustomers);
-  document.getElementById('open-care-from-customer').addEventListener('click', openCareFromCustomer);
-  document.getElementById('open-history').addEventListener('click', openCustomerHistory);
+  const customerForm = document.getElementById('customer-form');
+  if (customerForm) {
+    customerForm.addEventListener('submit', handleCustomerSubmit);
+    document.getElementById('customer-reset')?.addEventListener('click', () => showToast('Đã xóa thông tin trong form khách hàng'));
+    document.getElementById('customer-source')?.addEventListener('change', toggleSourceDetail);
+    document.getElementById('has-purchased')?.addEventListener('change', togglePurchase);
+    document.getElementById('customer-search')?.addEventListener('input', renderCustomers);
+    document.getElementById('open-care-from-customer')?.addEventListener('click', openCareFromCustomer);
+    document.getElementById('open-history')?.addEventListener('click', openCustomerHistory);
+  }
 
-  document.getElementById('care-form').addEventListener('submit', handleCareSubmit);
-  document.getElementById('care-reset').addEventListener('click', () => showToast('Đã xóa form CSKH'));
-  document.getElementById('care-search').addEventListener('input', renderCare);
-  document.getElementById('lost-reason').addEventListener('input', () => {});
-  document.getElementById('care-form').addEventListener('change', evt => {
-    if (evt.target.name === 'rating') {
-      document.getElementById('lost-reason').classList.toggle('hidden', evt.target.value !== 'lost');
-      document.getElementById('schedule-panel').classList.toggle('hidden', evt.target.value !== 'scheduled');
-    }
-  });
+  const careForm = document.getElementById('care-form');
+  if (careForm) {
+    careForm.addEventListener('submit', handleCareSubmit);
+    document.getElementById('care-reset')?.addEventListener('click', () => showToast('Đã xóa form CSKH'));
+    document.getElementById('care-search')?.addEventListener('input', renderCare);
+    document.getElementById('lost-reason')?.addEventListener('input', () => {});
+    careForm.addEventListener('change', evt => {
+      if (evt.target.name === 'rating') {
+        document.getElementById('lost-reason')?.classList.toggle('hidden', evt.target.value !== 'lost');
+        document.getElementById('schedule-panel')?.classList.toggle('hidden', evt.target.value !== 'scheduled');
+      }
+    });
+  }
 
-  document.querySelectorAll('#service .sub-tab').forEach(tab => tab.addEventListener('click', () => switchSubTab(tab)));
-  document.getElementById('warranty-form').addEventListener('submit', evt => handleServiceSubmit(evt, 'warranty'));
-  document.getElementById('maintenance-form').addEventListener('submit', evt => handleServiceSubmit(evt, 'maintenance'));
-  document.getElementById('warranty-search').addEventListener('input', renderWarranties);
-  document.getElementById('maintenance-search').addEventListener('input', renderMaintenances);
-  document.getElementById('service-filter').addEventListener('change', renderMaintenances);
+  if (document.getElementById('service')) {
+    document.querySelectorAll('#service .sub-tab').forEach(tab => tab.addEventListener('click', () => switchSubTab(tab)));
+    document.getElementById('warranty-form')?.addEventListener('submit', evt => handleServiceSubmit(evt, 'warranty'));
+    document.getElementById('maintenance-form')?.addEventListener('submit', evt => handleServiceSubmit(evt, 'maintenance'));
+    document.getElementById('warranty-search')?.addEventListener('input', renderWarranties);
+    document.getElementById('maintenance-search')?.addEventListener('input', renderMaintenances);
+    document.getElementById('service-filter')?.addEventListener('change', renderMaintenances);
+  }
 
-  document.querySelectorAll('#checklist .sub-tab').forEach(tab => tab.addEventListener('click', () => switchSubTab(tab)));
-  document.getElementById('task-template').addEventListener('submit', handleTaskTemplateSubmit);
-  document.getElementById('task-report').addEventListener('submit', handleTaskReportSubmit);
-  document.getElementById('task-template-search').addEventListener('input', renderTaskTemplates);
-  document.getElementById('task-report-search').addEventListener('input', renderTaskReports);
+  if (document.getElementById('checklist')) {
+    document.querySelectorAll('#checklist .checklist-link').forEach(btn => btn.addEventListener('click', () => switchChecklistPane(btn.dataset.subpage)));
+    document.getElementById('task-template')?.addEventListener('submit', handleTaskTemplateSubmit);
+    document.getElementById('task-report')?.addEventListener('submit', handleTaskReportSubmit);
+    document.getElementById('task-template-search')?.addEventListener('input', renderTaskTemplates);
+    document.getElementById('task-report-search')?.addEventListener('input', renderTaskReports);
+    document.getElementById('task-report-template')?.addEventListener('change', handleReportTemplateChange);
+    document.getElementById('task-report')?.addEventListener('reset', () => syncReportTemplate(''));
+    document.getElementById('task-schedule-staff')?.addEventListener('change', renderTaskSchedule);
+    document.getElementById('task-schedule-month')?.addEventListener('change', renderTaskSchedule);
+    document.getElementById('task-schedule-reset')?.addEventListener('click', resetTaskScheduleFilters);
+  }
 
-  document.getElementById('inventory-form').addEventListener('submit', handleInventorySubmit);
-  document.getElementById('inventory-search').addEventListener('input', renderInventory);
-  document.getElementById('inventory-filter').addEventListener('change', renderInventory);
+  const inventoryForm = document.getElementById('inventory-form');
+  if (inventoryForm) {
+    inventoryForm.addEventListener('submit', handleInventorySubmit);
+    document.getElementById('inventory-search')?.addEventListener('input', renderInventory);
+    document.getElementById('inventory-filter')?.addEventListener('change', renderInventory);
+  }
 
-  document.getElementById('finance-form').addEventListener('submit', handleFinanceSubmit);
-  document.getElementById('finance-month').addEventListener('change', renderFinanceSummary);
-  document.getElementById('finance-export').addEventListener('click', exportFinance);
+  const financeForm = document.getElementById('finance-form');
+  if (financeForm) {
+    financeForm.addEventListener('submit', handleFinanceSubmit);
+    document.getElementById('finance-month')?.addEventListener('change', renderFinanceSummary);
+    document.getElementById('finance-export')?.addEventListener('click', exportFinance);
+  }
 
-  document.getElementById('branding-form').addEventListener('submit', handleBrandingSubmit);
-  document.getElementById('branding-reset').addEventListener('click', resetBranding);
-  document.getElementById('staff-form').addEventListener('submit', handleStaffSubmit);
-  document.getElementById('clear-approvals').addEventListener('click', clearApprovals);
-  document.getElementById('toggle-layout-edit').addEventListener('click', toggleLayoutEdit);
+  const brandingForm = document.getElementById('branding-form');
+  if (brandingForm) {
+    brandingForm.addEventListener('submit', handleBrandingSubmit);
+    document.getElementById('branding-reset')?.addEventListener('click', resetBranding);
+    document.getElementById('staff-form')?.addEventListener('submit', handleStaffSubmit);
+    document.getElementById('clear-approvals')?.addEventListener('click', clearApprovals);
+    document.getElementById('toggle-layout-edit')?.addEventListener('click', toggleLayoutEdit);
+  }
+
+  const syncForm = document.getElementById('sync-config-form');
+  if (syncForm) {
+    syncForm.addEventListener('submit', handleSyncConfigSubmit);
+    syncForm.querySelector('[name="enabled"]')?.addEventListener('change', handleSyncToggle);
+    document.getElementById('sync-test')?.addEventListener('click', handleSyncTest);
+    document.querySelectorAll('[data-sync-action]')
+      .forEach(btn => btn.addEventListener('click', handleSyncAction));
+    document.getElementById('sync-import-input')?.addEventListener('change', handleImportFile);
+  }
 
   document.addEventListener('click', evt => {
     if (evt.target.matches('[data-close]')) {
@@ -166,21 +295,40 @@ function attachEventListeners() {
 }
 
 function bootApp() {
-  elements.loginCard.style.display = 'none';
-  elements.sidebar.style.display = 'flex';
-  document.body.classList.remove('auth-only');
-  elements.roleLabel.textContent = `${currentUser.fullName} (${currentUser.role === 'admin' ? 'Quản trị viên' : 'Nhân viên'})`;
+  if (elements.loginCard) elements.loginCard.style.display = 'none';
+  if (elements.sidebar) elements.sidebar.style.display = 'flex';
+  document.body?.classList?.remove('auth-only');
+  if (elements.roleLabel) {
+    elements.roleLabel.textContent = `${currentUser.fullName} (${currentUser.role === 'admin' ? 'Quản trị viên' : 'Nhân viên'})`;
+  }
   filterNavByRole();
   refreshAll();
-  showPage('dashboard');
+  if (location.hash) {
+    const success = showPageFromHash({ silent: true });
+    if (!success) {
+      const fallback = getInitialPage({ preferHash: false });
+      if (fallback) {
+        showPage(fallback, { silent: true });
+        updateHashSilently(fallback);
+      }
+    }
+  } else {
+    const initialPage = getInitialPage({ preferHash: false });
+    if (initialPage) {
+      showPage(initialPage);
+      updateHashSilently(initialPage);
+    }
+  }
+  startRemotePolling();
 }
 
 function showLogin() {
-  elements.loginCard.style.display = 'block';
-  elements.sidebar.style.display = 'none';
+  if (elements.loginCard) elements.loginCard.style.display = 'block';
+  if (elements.sidebar) elements.sidebar.style.display = 'none';
   elements.pages.forEach(page => page.classList.remove('active'));
   elements.navLinks.forEach(link => link.classList.remove('active'));
-  document.getElementById('login-username').focus();
+  document.getElementById('login-username')?.focus();
+  stopRemotePolling();
 }
 
 function filterNavByRole() {
@@ -193,12 +341,37 @@ function filterNavByRole() {
   }
 }
 
-function showPage(id) {
-  if (id === 'settings' && currentUser?.role !== 'admin') {
-    showToast('Bạn không có quyền truy cập mục này', true);
-    return;
+function getInitialPage({ preferHash = true } = {}) {
+  const candidates = [
+    preferHash ? location.hash.replace('#', '') : null,
+    document.body?.dataset?.defaultPage,
+    window.DEFAULT_PAGE,
+    'dashboard'
+  ];
+  for (const candidate of candidates) {
+    const id = candidate?.trim?.();
+    if (!id) continue;
+    if (id === 'settings' && currentUser?.role !== 'admin') continue;
+    if ([...elements.pages].some(page => page.id === id)) {
+      return id;
+    }
   }
+  return elements.pages[0]?.id ?? null;
+}
+
+function showPage(id, { silent = false } = {}) {
+  if (!id) return false;
+  if (id === 'settings' && currentUser?.role !== 'admin') {
+    if (!silent) {
+      showToast('Bạn không có quyền truy cập mục này', true);
+    }
+    return false;
+  }
+  const hasPage = [...elements.pages].some(page => page.id === id);
+  if (!hasPage) return false;
   elements.pages.forEach(page => page.classList.toggle('active', page.id === id));
+  elements.navLinks.forEach(link => link.classList.toggle('active', link.dataset.target === id));
+  return true;
 }
 
 function handleLogin(evt) {
@@ -207,7 +380,27 @@ function handleLogin(evt) {
   const password = document.getElementById('login-password').value.trim();
   const remember = document.getElementById('remember-me').checked;
   const staySigned = document.getElementById('stay-signed').checked;
-  const user = state.users.find(u => u.username === username && u.password === password);
+  state = ensureStateIntegrity(state);
+  let user = state.users.find(u => u.username === username && u.password === password);
+  if (!user) {
+    const fallback = defaultState().users.find(
+      u => u.username === username && u.password === password
+    );
+    const existing = state.users.find(u => u.username === username);
+    if (fallback && !existing) {
+      user = { ...fallback };
+      state.users.push(user);
+      saveState();
+      user = state.users.find(u => u.username === username && u.password === password);
+    } else if (fallback && existing) {
+      existing.password = fallback.password;
+      existing.role = existing.role || fallback.role;
+      existing.fullName = existing.fullName || fallback.fullName;
+      existing.updatedAt = new Date().toISOString();
+      saveState();
+      user = state.users.find(u => u.username === username && u.password === password);
+    }
+  }
   withLoading('Đang kiểm tra tài khoản...', () => {
     if (!user) {
       showToast('Sai tài khoản hoặc mật khẩu', true);
@@ -292,6 +485,7 @@ function handleCustomerSubmit(evt) {
     data.id = crypto.randomUUID();
     data.createdBy = currentUser.username;
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     data.hasPurchased = !!form.hasPurchased.checked;
     state.customers.push(data);
     saveState();
@@ -308,7 +502,7 @@ function renderCustomers() {
   const query = document.getElementById('customer-search').value.toLowerCase();
   const rows = state.customers
     .filter(c => !query || Object.values(c).some(v => String(v ?? '').toLowerCase().includes(query)))
-    .sort((a, b) => new Date(b.date ?? b.createdAt) - new Date(a.date ?? a.createdAt))
+    .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
     .map(c => {
       const tr = document.createElement('tr');
       tr.dataset.id = c.id;
@@ -365,7 +559,9 @@ function handleCustomerAction(evt) {
     const customer = state.customers.find(c => c.id === id);
     if (!customer) return;
     showPage('care');
-    elements.navLinks.forEach(btn => btn.classList.toggle('active', btn.dataset.target === 'care'));
+    if (location.hash !== '#care') {
+      location.hash = 'care';
+    }
     fillCareForm(customer);
   }
   if (evt.target.dataset.action === 'delete') {
@@ -380,6 +576,7 @@ function handleCareSubmit(evt) {
     const data = Object.fromEntries(new FormData(form));
     data.id = crypto.randomUUID();
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     data.createdBy = currentUser.username;
     if (data.rating !== 'lost') delete data.lostReason;
     if (data.rating !== 'scheduled') {
@@ -400,7 +597,7 @@ function renderCare() {
   const query = document.getElementById('care-search').value.toLowerCase();
   const rows = state.care
     .filter(item => !query || Object.values(item).some(v => String(v ?? '').toLowerCase().includes(query)))
-    .sort((a, b) => new Date(b.date ?? b.createdAt) - new Date(a.date ?? a.createdAt))
+    .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
     .map(item => {
       const tr = document.createElement('tr');
       tr.dataset.id = item.id;
@@ -476,6 +673,7 @@ function handleServiceSubmit(evt, type) {
     data.id = crypto.randomUUID();
     data.type = type;
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     data.status = 'pending';
     data.parts = [];
     data.supported = false;
@@ -572,10 +770,13 @@ function handleTaskTemplateSubmit(evt) {
     data.id = crypto.randomUUID();
     data.tasks = data.tasks.split('\n').map(t => t.trim()).filter(Boolean);
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     state.tasks.templates.push(data);
     saveState();
     evt.target.reset();
     renderTaskTemplates();
+    renderTaskSchedule();
+    populateTaskReportTemplates();
     showToast('Đã lưu hạng mục công việc');
   });
 }
@@ -583,12 +784,34 @@ function handleTaskTemplateSubmit(evt) {
 function handleTaskReportSubmit(evt) {
   evt.preventDefault();
   withLoading('Đang lưu báo cáo...', () => {
-    const data = Object.fromEntries(new FormData(evt.target));
+    const formData = new FormData(evt.target);
+    const data = Object.fromEntries(formData.entries());
+    const template = state.tasks.templates.find(t => t.id === data.templateId);
+    const taskResults = (template?.tasks ?? []).map((task, index) => ({
+      name: task,
+      status: formData.get(`task-status-${index}`) ?? 'pending',
+      note: formData.get(`task-note-${index}`) ?? ''
+    }));
+    Object.keys(data).forEach(key => {
+      if (key.startsWith('task-status-') || key.startsWith('task-note-')) {
+        delete data[key];
+      }
+    });
+    data.taskResults = taskResults;
+    data.totalTasks = taskResults.length;
+    data.completedTasks = taskResults.filter(item => item.status === 'done').length;
+    if (data.totalTasks) {
+      data.status = data.completedTasks === data.totalTasks ? 'done' : 'partial';
+    }
     data.id = crypto.randomUUID();
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     state.tasks.reports.push(data);
     saveState();
     evt.target.reset();
+    syncReportTemplate('');
+    renderTaskTemplates();
+    renderTaskSchedule();
     renderTaskReports();
     showToast('Đã lưu báo cáo công việc');
   });
@@ -596,61 +819,147 @@ function handleTaskReportSubmit(evt) {
 
 function renderTaskTemplates() {
   const tbody = document.querySelector('#task-template-table tbody');
-  const query = document.getElementById('task-template-search').value.toLowerCase();
+  if (!tbody) return;
+  const searchInput = document.getElementById('task-template-search');
+  const query = (searchInput?.value || '').toLowerCase();
   const rows = state.tasks.templates
     .filter(item => !query || Object.values(item).some(v => String(v ?? '').toLowerCase().includes(query)))
     .sort((a, b) => new Date(b.date ?? b.createdAt) - new Date(a.date ?? a.createdAt))
     .map(item => {
       const tr = document.createElement('tr');
       tr.dataset.id = item.id;
+      const relatedReports = findReportsForTemplate(item);
+      const reportLabel = relatedReports.length ? `${relatedReports.length} báo cáo` : 'Chưa có';
       tr.innerHTML = `
-        <td>${formatDate(item.date)}</td>
-        <td>${item.staff}</td>
+        <td>${formatDate(item.date || item.createdAt)}</td>
+        <td>${item.staff ?? 'Chưa phân công'}</td>
         <td>${renderShift(item.shift)}</td>
         <td>${item.tasks.length}</td>
+        <td>${reportLabel}</td>
         <td>
           <button data-action="view">Xem</button>
+          <button data-action="report" class="ghost">Báo cáo</button>
           <button data-action="delete" class="danger">Xóa</button>
         </td>`;
       return tr;
     });
+  if (!rows.length) {
+    const empty = document.createElement('tr');
+    empty.innerHTML = '<td colspan="6">Chưa có checklist nào.</td>';
+    tbody.replaceChildren(empty);
+    return;
+  }
+  tbody.replaceChildren(...rows);
+  tbody.querySelectorAll('button').forEach(btn => btn.addEventListener('click', handleTaskTemplateAction));
+}
+
+function renderTaskSchedule() {
+  const tbody = document.querySelector('#task-schedule-table tbody');
+  if (!tbody) return;
+  const staffFilter = document.getElementById('task-schedule-staff')?.value ?? 'all';
+  const monthFilter = document.getElementById('task-schedule-month')?.value ?? '';
+  const rows = state.tasks.templates
+    .filter(item => staffFilter === 'all' || item.staff === staffFilter)
+    .filter(item => {
+      if (!monthFilter) return true;
+      if (!item.date) return false;
+      return item.date.startsWith(monthFilter);
+    })
+    .sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt))
+    .map(item => {
+      const tr = document.createElement('tr');
+      tr.dataset.id = item.id;
+      const reports = findReportsForTemplate(item);
+      const reportLabel = reports.length ? `${reports.length} báo cáo` : 'Chưa có';
+      tr.innerHTML = `
+        <td>${formatDate(item.date || item.createdAt)}</td>
+        <td>${item.staff ?? 'Chưa phân công'}</td>
+        <td>${renderShift(item.shift)}</td>
+        <td>${item.tasks.length}</td>
+        <td>${reportLabel}</td>
+        <td>
+          <div class="task-schedule-actions">
+            <button data-action="view">Xem</button>
+            <button data-action="report" class="ghost">Báo cáo</button>
+          </div>
+        </td>`;
+      return tr;
+    });
+  if (!rows.length) {
+    const empty = document.createElement('tr');
+    empty.innerHTML = '<td colspan="6">Chưa có checklist phù hợp với bộ lọc.</td>';
+    tbody.replaceChildren(empty);
+    return;
+  }
   tbody.replaceChildren(...rows);
   tbody.querySelectorAll('button').forEach(btn => btn.addEventListener('click', handleTaskTemplateAction));
 }
 
 function renderTaskReports() {
   const tbody = document.querySelector('#task-report-table tbody');
-  const query = document.getElementById('task-report-search').value.toLowerCase();
+  if (!tbody) return;
+  const searchInput = document.getElementById('task-report-search');
+  const query = (searchInput?.value || '').toLowerCase();
   const rows = state.tasks.reports
-    .filter(item => !query || Object.values(item).some(v => String(v ?? '').toLowerCase().includes(query)))
-    .sort((a, b) => new Date(b.date ?? b.createdAt) - new Date(a.date ?? a.createdAt))
+    .filter(item => {
+      if (!query) return true;
+      const values = [
+        item.date,
+        item.staff,
+        item.shift,
+        item.status,
+        item.reason,
+        item.expected,
+        item.summary,
+        ...(item.taskResults ?? []).map(result => `${result.name} ${result.note ?? ''}`)
+      ];
+      return values.some(v => String(v ?? '').toLowerCase().includes(query));
+    })
+    .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
     .map(item => {
       const tr = document.createElement('tr');
       tr.dataset.id = item.id;
+      const template = state.tasks.templates.find(t => t.id === item.templateId);
+      const totalTasks = Number(item.totalTasks ?? template?.tasks?.length ?? 0);
+      const completedTasks = Number(item.completedTasks ?? (item.status === 'done' ? totalTasks : 0));
+      const completion = totalTasks ? `<span class="muted">${completedTasks}/${totalTasks} mục</span>` : '';
       tr.innerHTML = `
-        <td>${formatDate(item.date)}</td>
-        <td>${item.staff}</td>
+        <td>${formatDate(item.date || item.createdAt)}</td>
+        <td>${item.staff ?? 'Chưa phân công'}</td>
         <td>${renderShift(item.shift)}</td>
-        <td>${renderTaskStatus(item.status)}</td>
+        <td>${renderTaskStatus(item.status)}${completion}</td>
         <td>
           <button data-action="view">Xem</button>
           <button data-action="delete" class="danger">Xóa</button>
         </td>`;
       return tr;
     });
+  if (!rows.length) {
+    const empty = document.createElement('tr');
+    empty.innerHTML = '<td colspan="5">Chưa có báo cáo nào.</td>';
+    tbody.replaceChildren(empty);
+    return;
+  }
   tbody.replaceChildren(...rows);
   tbody.querySelectorAll('button').forEach(btn => btn.addEventListener('click', handleTaskReportAction));
 }
 
 function handleTaskTemplateAction(evt) {
-  const id = evt.target.closest('tr').dataset.id;
-  if (evt.target.dataset.action === 'view') {
+  const action = evt.target.dataset.action;
+  if (!action) return;
+  const row = evt.target.closest('tr');
+  const id = row?.dataset.id;
+  if (!id) return;
+  if (action === 'view') {
     const template = state.tasks.templates.find(t => t.id === id);
     if (!template) return;
-    const relatedReports = state.tasks.reports.filter(r => r.staff === template.staff && r.date === template.date && r.shift === template.shift);
-    openInfoModal('Chi tiết hạng mục', renderTaskTemplateDetail(template, relatedReports));
+    const relatedReports = findReportsForTemplate(template);
+    openInfoModal('Chi tiết checklist', renderTaskTemplateDetail(template, relatedReports));
   }
-  if (evt.target.dataset.action === 'delete') {
+  if (action === 'report') {
+    openReportForTemplate(id);
+  }
+  if (action === 'delete') {
     requestDelete('taskTemplate', id);
   }
 }
@@ -660,7 +969,8 @@ function handleTaskReportAction(evt) {
   if (evt.target.dataset.action === 'view') {
     const report = state.tasks.reports.find(t => t.id === id);
     if (!report) return;
-    const template = state.tasks.templates.find(t => t.staff === report.staff && t.date === report.date && t.shift === report.shift);
+    const template = state.tasks.templates.find(t => t.id === report.templateId)
+      ?? state.tasks.templates.find(t => t.staff === report.staff && t.date === report.date && t.shift === report.shift);
     openInfoModal('Báo cáo công việc', renderTaskReportDetail(report, template));
   }
   if (evt.target.dataset.action === 'delete') {
@@ -669,11 +979,18 @@ function handleTaskReportAction(evt) {
 }
 
 function renderTaskTemplateDetail(template, reports) {
-  const tasks = template.tasks.map(task => `<li>${task}</li>`).join('');
-  const reportList = reports.map(r => `<li>${formatDate(r.date)} - ${renderShift(r.shift)}: ${renderTaskStatus(r.status)}</li>`).join('') || '<li>Chưa có báo cáo</li>';
+  const tasks = (template.tasks ?? []).map(task => `<li>${task}</li>`).join('') || '<li>Chưa có hạng mục</li>';
+  const reportList = reports.length
+    ? reports.map(r => {
+        const total = Number(r.totalTasks ?? template.tasks?.length ?? 0);
+        const completed = Number(r.completedTasks ?? (r.status === 'done' ? total : 0));
+        const summary = total ? `<span class="muted">${completed}/${total} mục</span>` : '';
+        return `<li>${formatDate(r.date || r.createdAt)} - ${renderShift(r.shift)}: ${renderTaskStatus(r.status)} ${summary}</li>`;
+      }).join('')
+    : '<li>Chưa có báo cáo</li>';
   return `
-    <p><strong>Ngày:</strong> ${formatDate(template.date)}</p>
-    <p><strong>Nhân viên:</strong> ${template.staff}</p>
+    <p><strong>Ngày:</strong> ${formatDate(template.date || template.createdAt)}</p>
+    <p><strong>Nhân viên:</strong> ${template.staff ?? 'Chưa phân công'}</p>
     <p><strong>Ca:</strong> ${renderShift(template.shift)}</p>
     <p><strong>Ghi chú:</strong> ${template.notes ?? 'Không có'}</p>
     <h4>Danh sách công việc</h4>
@@ -683,18 +1000,175 @@ function renderTaskTemplateDetail(template, reports) {
 }
 
 function renderTaskReportDetail(report, template) {
+  const totalTasks = Number(report.totalTasks ?? template?.tasks?.length ?? 0);
+  const completedTasks = Number(report.completedTasks ?? (report.status === 'done' ? totalTasks : 0));
+  const progressNote = report.progress ? `<p><strong>Ghi chú tiến độ:</strong> ${report.progress.replace(/\n/g, '<br/>')}</p>` : '';
+  const summary = totalTasks
+    ? `<div class="task-report-summary"><span><strong>${completedTasks}</strong> / ${totalTasks} hạng mục hoàn thành</span></div>`
+    : '';
+  const tasks = report.taskResults?.length
+    ? `<ol>${report.taskResults.map((task, index) => {
+        const note = task.note ? `<div class="table-note">${task.note}</div>` : '';
+        return `<li><div><strong>${index + 1}.</strong> ${task.name} ${renderTaskResultStatus(task.status)}</div>${note}</li>`;
+      }).join('')}</ol>`
+    : template?.tasks?.length
+      ? `<ol>${template.tasks.map((task, index) => `<li><strong>${index + 1}.</strong> ${task}</li>`).join('')}</ol>`
+      : '<p>Không có checklist tham chiếu.</p>';
+  const templateNotice = template ? '' : '<p><em>Không tìm thấy checklist gốc.</em></p>';
   return `
-    <p><strong>Ngày:</strong> ${formatDate(report.date)}</p>
-    <p><strong>Nhân viên:</strong> ${report.staff}</p>
+    <p><strong>Ngày:</strong> ${formatDate(report.date || report.createdAt)}</p>
+    <p><strong>Nhân viên:</strong> ${report.staff ?? 'Chưa phân công'}</p>
     <p><strong>Ca:</strong> ${renderShift(report.shift)}</p>
-    <p><strong>Tiến độ:</strong> ${report.progress.replace(/\n/g, '<br/>')}</p>
+    ${summary}
+    ${progressNote}
     <p><strong>Trạng thái:</strong> ${renderTaskStatus(report.status)}</p>
     <p><strong>Lý do:</strong> ${report.reason || 'Không'}</p>
     <p><strong>Dự kiến hoàn thành:</strong> ${report.expected || 'Không'}</p>
     <p><strong>Tổng kết:</strong> ${report.summary || 'Không'}</p>
     <hr/>
-    <h4>Hạng mục liên quan</h4>
-    ${template ? renderTaskTemplateDetail(template, []) : '<p>Không tìm thấy hạng mục</p>'}`;
+    <h4>Kết quả checklist</h4>
+    ${tasks}
+    ${templateNotice}`;
+}
+
+function findReportsForTemplate(template) {
+  if (!template) return [];
+  return state.tasks.reports.filter(r => r.staff === template.staff && r.date === template.date && r.shift === template.shift);
+}
+
+function handleReportTemplateChange(evt) {
+  syncReportTemplate(evt.target.value);
+}
+
+function syncReportTemplate(templateId) {
+  const form = document.getElementById('task-report');
+  const taskContainer = document.getElementById('task-report-tasks');
+  if (!form || !taskContainer) return;
+  if (!templateId) {
+    form.date.value = '';
+    form.staff.value = '';
+    if (form.staff.value) form.staff.selectedIndex = -1;
+    form.shift.value = '';
+    if (form.shift.value) form.shift.selectedIndex = -1;
+    taskContainer.classList.add('empty');
+    taskContainer.innerHTML = 'Chọn checklist để hiển thị các hạng mục.';
+    return;
+  }
+  const template = state.tasks.templates.find(t => t.id === templateId);
+  if (!template) {
+    taskContainer.classList.add('empty');
+    taskContainer.innerHTML = 'Không tìm thấy checklist đã chọn.';
+    return;
+  }
+  if (template.date) {
+    form.date.value = template.date;
+  } else {
+    form.date.value = '';
+  }
+  if (template.staff) {
+    if (![...form.staff.options].some(opt => opt.value === template.staff)) {
+      const option = document.createElement('option');
+      option.value = template.staff;
+      option.textContent = template.staff;
+      form.staff.appendChild(option);
+    }
+    form.staff.value = template.staff;
+  } else {
+    form.staff.value = '';
+    if (form.staff.value) form.staff.selectedIndex = -1;
+  }
+  if (template.shift) form.shift.value = template.shift;
+  if (!template.shift) {
+    form.shift.value = '';
+    if (form.shift.value) form.shift.selectedIndex = -1;
+  }
+  if (template.tasks?.length) {
+    taskContainer.classList.remove('empty');
+    const items = template.tasks.map((task, index) => `
+      <div class="task-report-item" data-index="${index}">
+        <div class="task-report-item-header">
+          <span>${index + 1}. ${task}</span>
+          <select name="task-status-${index}">
+            <option value="done">Hoàn thành</option>
+            <option value="pending">Chưa hoàn thành</option>
+          </select>
+        </div>
+        <textarea name="task-note-${index}" placeholder="Ghi chú (tuỳ chọn)"></textarea>
+      </div>`).join('');
+    taskContainer.innerHTML = `${items}<div class="task-report-summary"><span><strong>${template.tasks.length}</strong> hạng mục trong checklist</span></div>`;
+  } else {
+    taskContainer.classList.add('empty');
+    taskContainer.innerHTML = 'Checklist chưa có hạng mục.';
+  }
+}
+
+function switchChecklistPane(target) {
+  const id = typeof target === 'string' ? target : target?.dataset?.subpage;
+  if (!id) return;
+  const buttons = document.querySelectorAll('#checklist .checklist-link');
+  const panels = document.querySelectorAll('#checklist .checklist-panel');
+  let matched = false;
+  panels.forEach(panel => {
+    const isActive = panel.dataset.subpage === id;
+    panel.classList.toggle('active', isActive);
+    if (isActive) matched = true;
+  });
+  buttons.forEach(btn => btn.classList.toggle('active', btn.dataset.subpage === id));
+  if (!matched && panels.length) {
+    panels[0].classList.add('active');
+    buttons[0]?.classList.add('active');
+  }
+}
+
+function resetTaskScheduleFilters() {
+  const staffSelect = document.getElementById('task-schedule-staff');
+  const monthInput = document.getElementById('task-schedule-month');
+  if (staffSelect) staffSelect.value = 'all';
+  if (monthInput) monthInput.value = '';
+  renderTaskSchedule();
+}
+
+function openReportForTemplate(id) {
+  const template = state.tasks.templates.find(t => t.id === id);
+  if (!template) return;
+  showPage('checklist', { silent: true });
+  updateHashSilently('checklist');
+  switchChecklistPane('reports');
+  const select = document.getElementById('task-report-template');
+  if (!select) return;
+  populateTaskReportTemplates();
+  if (![...select.options].some(opt => opt.value === id)) {
+    const option = document.createElement('option');
+    option.value = template.id;
+    option.textContent = formatTemplateLabel(template);
+    select.appendChild(option);
+  }
+  select.value = id;
+  syncReportTemplate(id);
+  document.getElementById('task-report')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function populateTaskReportTemplates() {
+  const select = document.getElementById('task-report-template');
+  if (!select) return;
+  const current = select.value;
+  const templates = [...state.tasks.templates].sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+  const options = templates.map(template => `<option value="${template.id}">${formatTemplateLabel(template)}</option>`).join('');
+  select.innerHTML = `<option value="">-- Chọn checklist --</option>${options}`;
+  if (current && templates.some(t => t.id === current)) {
+    select.value = current;
+    syncReportTemplate(current);
+  } else {
+    select.value = '';
+    syncReportTemplate('');
+  }
+}
+
+function formatTemplateLabel(template) {
+  const dateLabel = formatDate(template.date || template.createdAt) || 'Chưa có ngày';
+  const staffLabel = template.staff || 'Chưa phân công';
+  const shiftLabel = renderShift(template.shift);
+  return `${dateLabel} · ${staffLabel} · ${shiftLabel}`;
 }
 
 function renderShift(shift) {
@@ -702,11 +1176,15 @@ function renderShift(shift) {
     morning: 'Ca sáng (08:00 - 16:00)',
     evening: 'Ca chiều (13:00 - 21:00)',
     full: 'Ca full (08:00 - 21:00)'
-  }[shift] ?? shift;
+  }[shift] ?? (shift || 'Chưa xác định');
 }
 
 function renderTaskStatus(status) {
   return status === 'done' ? '<span class="badge success">Hoàn thành</span>' : '<span class="badge warning">Chưa hoàn thành</span>';
+}
+
+function renderTaskResultStatus(status) {
+  return status === 'done' ? '<span class="badge success">Hoàn thành</span>' : '<span class="badge warning">Chưa xong</span>';
 }
 
 function handleInventorySubmit(evt) {
@@ -715,6 +1193,7 @@ function handleInventorySubmit(evt) {
     const data = Object.fromEntries(new FormData(evt.target));
     data.id = crypto.randomUUID();
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     state.inventory.push(data);
     saveState();
     evt.target.reset();
@@ -773,6 +1252,7 @@ function handleFinanceSubmit(evt) {
     const data = Object.fromEntries(new FormData(evt.target));
     data.id = crypto.randomUUID();
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     state.finance.push(data);
     saveState();
     evt.target.reset();
@@ -1053,6 +1533,495 @@ function renderCollectionName(collection) {
   }[collection] ?? collection;
 }
 
+function renderSyncStatus() {
+  const wrapper = document.getElementById('sync-status');
+  const badge = document.getElementById('sync-status-badge');
+  if (!wrapper) return;
+  const config = state.sync ?? defaultState().sync;
+  const enabled = Boolean(config.enabled && config.remoteUrl);
+  const statusDot = `<span class="status-dot ${enabled ? 'online' : 'offline'}"></span>`;
+  const lines = [
+    `<p><strong>Trạng thái:</strong> ${statusDot}${enabled ? 'Đã bật đồng bộ' : 'Đang tắt đồng bộ'}</p>`,
+    `<p><strong>Máy chủ:</strong> ${config.remoteUrl ? `<span class="mono">${config.remoteUrl}</span>` : 'Chưa cấu hình'}</p>`,
+    `<p><strong>Lần gửi:</strong> ${config.lastPush ? formatDateTime(config.lastPush) : 'Chưa có'}</p>`,
+    `<p><strong>Lần tải:</strong> ${config.lastPull ? formatDateTime(config.lastPull) : 'Chưa có'}</p>`
+  ];
+  if (config.lastError) {
+    lines.push(`<p class="error"><strong>Lỗi gần nhất:</strong> ${config.lastError}</p>`);
+  }
+  wrapper.innerHTML = lines.join('');
+  if (badge) {
+    badge.textContent = enabled ? 'Đã bật' : 'Đang tắt';
+    badge.classList.toggle('online', enabled);
+    badge.classList.toggle('offline', !enabled);
+  }
+}
+
+function updateSyncForm() {
+  const form = document.getElementById('sync-config-form');
+  if (!form) return;
+  const config = state.sync ?? defaultState().sync;
+  const enabledInput = form.querySelector('[name="enabled"]');
+  const urlInput = form.querySelector('[name="remoteUrl"]');
+  const keyInput = form.querySelector('[name="apiKey"]');
+  const methodSelect = form.querySelector('[name="method"]');
+  const intervalInput = form.querySelector('[name="interval"]');
+  const enabled = Boolean(config.enabled);
+  if (enabledInput) enabledInput.checked = enabled;
+  if (urlInput) {
+    urlInput.value = config.remoteUrl ?? '';
+    urlInput.disabled = !enabled;
+  }
+  if (keyInput) {
+    keyInput.value = config.apiKey ?? '';
+    keyInput.disabled = !enabled;
+  }
+  if (methodSelect) {
+    methodSelect.value = (config.method ?? 'PUT').toUpperCase();
+    methodSelect.disabled = !enabled;
+  }
+  if (intervalInput) {
+    intervalInput.value = config.autoPullMinutes ?? 5;
+    intervalInput.disabled = !enabled;
+  }
+  const testButton = document.getElementById('sync-test');
+  if (testButton) testButton.disabled = !enabled;
+  document.querySelectorAll('[data-sync-action]').forEach(button => {
+    const action = button.dataset.syncAction;
+    const requiresRemote = !['export', 'import'].includes(action);
+    button.disabled = requiresRemote ? !enabled : false;
+  });
+}
+
+function scheduleRemoteSync(options = {}) {
+  if (!isRemoteSyncEnabled()) return;
+  const { immediate = false, reason = 'auto' } = options;
+  if (immediate) {
+    pushRemoteState({ reason }).catch(() => {});
+    return;
+  }
+  clearTimeout(remotePushTimer);
+  remotePushTimer = setTimeout(() => {
+    pushRemoteState({ reason }).catch(() => {});
+  }, REMOTE_PUSH_DEBOUNCE);
+}
+
+function isRemoteSyncEnabled() {
+  const config = state.sync ?? defaultState().sync;
+  return Boolean(config.enabled && config.remoteUrl);
+}
+
+async function pushRemoteState({ reason = 'auto' } = {}) {
+  if (!isRemoteSyncEnabled()) return false;
+  if (remoteSyncInFlight) {
+    pendingRemotePush = true;
+    return false;
+  }
+  remoteSyncInFlight = true;
+  const config = state.sync;
+  try {
+    const payload = prepareStateForTransport();
+    const response = await fetch(config.remoteUrl, {
+      method: (config.method ?? 'PUT').toUpperCase(),
+      headers: buildSyncHeaders({ includeJson: true }),
+      body: JSON.stringify({
+        reason,
+        updatedAt: new Date().toISOString(),
+        data: payload
+      })
+    });
+    if (!response.ok) {
+      throw new Error(`Máy chủ trả về mã ${response.status}`);
+    }
+    const pushedAt = new Date().toISOString();
+    state.sync.lastPush = pushedAt;
+    state.sync.lastError = null;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    return true;
+  } catch (error) {
+    state.sync.lastError = error.message;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    console.error('Đẩy dữ liệu lên máy chủ thất bại', error);
+    return false;
+  } finally {
+    remoteSyncInFlight = false;
+    if (pendingRemotePush) {
+      pendingRemotePush = false;
+      scheduleRemoteSync({ immediate: true, reason: 'retry' });
+    }
+  }
+}
+
+async function pullRemoteState({ silent = false } = {}) {
+  if (!isRemoteSyncEnabled()) return false;
+  const config = state.sync;
+  try {
+    const response = await fetch(config.remoteUrl, {
+      method: 'GET',
+      headers: buildSyncHeaders(),
+      cache: 'no-store'
+    });
+    if (!response.ok) {
+      throw new Error(`Máy chủ trả về mã ${response.status}`);
+    }
+    const payload = await response.json();
+    const remoteState = payload?.data ?? payload?.state ?? payload;
+    if (!remoteState || typeof remoteState !== 'object') {
+      throw new Error('Dữ liệu phản hồi không hợp lệ');
+    }
+    const normalizedRemote = normalizeIncomingState(remoteState);
+    const hasChanged = stateFingerprint(normalizedRemote) !== stateFingerprint(state);
+    state = normalizedRemote;
+    state.sync.lastPull = new Date().toISOString();
+    state.sync.lastError = null;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    applyBranding();
+    if (currentUser) {
+      refreshAll();
+      if (!silent && hasChanged) {
+        showToast('Đã cập nhật dữ liệu từ máy chủ');
+      }
+    }
+    startRemotePolling();
+    return hasChanged;
+  } catch (error) {
+    state.sync.lastError = error.message;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    if (!silent) {
+      showToast('Không thể tải dữ liệu từ máy chủ đồng bộ', true);
+    }
+    console.error('Không thể lấy dữ liệu từ máy chủ đồng bộ', error);
+    return false;
+  }
+}
+
+function startRemotePolling() {
+  clearInterval(remotePullTimer);
+  if (!isRemoteSyncEnabled()) return;
+  const interval = Math.max(1, Number(state.sync?.autoPullMinutes) || 5) * 60000;
+  remotePullTimer = setInterval(() => {
+    pullRemoteState({ silent: true });
+  }, interval);
+}
+
+function stopRemotePolling() {
+  clearInterval(remotePullTimer);
+  remotePullTimer = null;
+}
+
+function prepareStateForTransport() {
+  const cleaned = ensureStateIntegrity(state);
+  const clone = JSON.parse(JSON.stringify(cleaned));
+  if (!clone.sync) {
+    clone.sync = { ...defaultState().sync };
+  }
+  delete clone.sync.lastError;
+  delete clone.sync.lastPull;
+  delete clone.sync.lastPush;
+  return clone;
+}
+
+function normalizeIncomingState(nextState) {
+  const parsed = parseStoredState(JSON.stringify(nextState));
+  const localSync = state?.sync ?? defaultState().sync;
+  const incomingSync = parsed.sync ?? {};
+  return {
+    ...parsed,
+    sync: {
+      ...localSync,
+      ...incomingSync,
+      enabled: incomingSync.enabled ?? localSync.enabled,
+      remoteUrl: incomingSync.remoteUrl ?? localSync.remoteUrl,
+      apiKey: incomingSync.apiKey ?? localSync.apiKey,
+      method: (incomingSync.method ?? localSync.method ?? 'PUT').toUpperCase()
+    }
+  };
+}
+
+function ensureStateIntegrity(snapshot) {
+  const base = defaultState();
+  const source = snapshot && typeof snapshot === 'object' ? snapshot : {};
+  const normalized = {
+    ...base,
+    ...source
+  };
+
+  normalized.users = normalizeUsers(source.users, base.users);
+  normalized.customers = normalizeCollection(source.customers, base.customers);
+  normalized.care = normalizeCollection(source.care, base.care);
+  normalized.warranties = normalizeCollection(source.warranties, base.warranties);
+  normalized.maintenances = normalizeCollection(source.maintenances, base.maintenances);
+  normalized.inventory = normalizeCollection(source.inventory, base.inventory);
+  normalized.finance = normalizeCollection(source.finance, base.finance);
+  normalized.approvals = normalizeCollection(source.approvals, base.approvals);
+  normalized.tasks = {
+    templates: normalizeCollection(source?.tasks?.templates, base.tasks.templates).map(template => ({
+      ...template,
+      steps: ensureArray(template?.steps),
+      tasks: ensureArray(template?.tasks),
+      checklist: ensureArray(template?.checklist)
+    })),
+    reports: normalizeCollection(source?.tasks?.reports, base.tasks.reports).map(report => ({
+      ...report,
+      items: ensureArray(report?.items),
+      results: ensureArray(report?.results),
+      tasks: ensureArray(report?.tasks)
+    }))
+  };
+  normalized.sync = {
+    ...base.sync,
+    ...(source.sync ?? {})
+  };
+  return normalized;
+}
+
+function ensureArray(value, fallback = []) {
+  if (!Array.isArray(value)) return [...fallback];
+  return value.filter(item => item !== undefined && item !== null).map(item =>
+    typeof item === 'object' ? { ...item } : item
+  );
+}
+
+function normalizeCollection(value, fallback = []) {
+  const items = ensureArray(value, fallback);
+  const map = new Map();
+  items.forEach(item => {
+    if (!item || typeof item !== 'object') return;
+    const record = { ...item };
+    const key = record.id ?? record.username ?? JSON.stringify(record);
+    if (!map.has(key)) {
+      map.set(key, record);
+      return;
+    }
+    const existing = map.get(key);
+    const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+    const incomingTime = new Date(record.updatedAt || record.createdAt || 0).getTime();
+    if (incomingTime >= existingTime) {
+      map.set(key, { ...existing, ...record });
+    }
+  });
+  return [...map.values()];
+}
+
+function normalizeUsers(value, fallback = []) {
+  const defaults = ensureArray(fallback);
+  const provided = ensureArray(value);
+  const map = new Map();
+  provided.forEach(user => {
+    if (!user || typeof user !== 'object') return;
+    const username = String(user.username || '').trim();
+    if (!username) return;
+    map.set(username, {
+      username,
+      password: user.password || '',
+      role: user.role || 'employee',
+      fullName: user.fullName || username,
+      updatedAt: user.updatedAt || user.createdAt || new Date().toISOString()
+    });
+  });
+  defaults.forEach(user => {
+    const username = String(user.username || '').trim();
+    if (!username) return;
+    const existing = map.get(username);
+    if (!existing) {
+      map.set(username, { ...user });
+      return;
+    }
+    if (!existing.password) existing.password = user.password;
+    if (!existing.role) existing.role = user.role;
+    if (!existing.fullName) existing.fullName = user.fullName;
+  });
+  return [...map.values()].filter(user => user.password);
+}
+
+function stateFingerprint(target) {
+  const snapshot = JSON.parse(JSON.stringify(target ?? {}));
+  if (snapshot.sync) {
+    delete snapshot.sync.lastPull;
+    delete snapshot.sync.lastPush;
+    delete snapshot.sync.lastError;
+  }
+  return JSON.stringify(snapshot);
+}
+
+function buildSyncHeaders({ includeJson = false } = {}) {
+  const headers = {};
+  if (includeJson) headers['Content-Type'] = 'application/json';
+  if (state.sync?.apiKey) {
+    headers.Authorization = `Bearer ${state.sync.apiKey}`;
+  }
+  return headers;
+}
+
+function handleSyncConfigSubmit(evt) {
+  evt.preventDefault();
+  const form = evt.target;
+  const enabledInput = form.querySelector('[name="enabled"]');
+  const urlInput = form.querySelector('[name="remoteUrl"]');
+  const keyInput = form.querySelector('[name="apiKey"]');
+  const methodSelect = form.querySelector('[name="method"]');
+  const intervalInput = form.querySelector('[name="interval"]');
+  const enabled = enabledInput?.checked ?? false;
+  const remoteUrl = urlInput?.value.trim() ?? '';
+  const apiKey = keyInput?.value.trim() ?? '';
+  const method = (methodSelect?.value ?? 'PUT').toUpperCase();
+  const autoPullMinutes = Math.max(1, Number(intervalInput?.value) || 5);
+  if (enabled && !remoteUrl) {
+    showToast('Vui lòng nhập địa chỉ máy chủ trước khi bật đồng bộ', true);
+    enabledInput.checked = false;
+    handleSyncToggle({ target: enabledInput });
+    return;
+  }
+  state.sync = {
+    ...state.sync,
+    enabled: enabled && !!remoteUrl,
+    remoteUrl,
+    apiKey,
+    method,
+    autoPullMinutes
+  };
+  if (!state.sync.enabled) {
+    stopRemotePolling();
+  }
+  saveState({ skipRemote: true });
+  updateSyncForm();
+  renderSyncStatus();
+  if (state.sync.enabled) {
+    startRemotePolling();
+    pullRemoteState({ silent: true });
+    scheduleRemoteSync({ immediate: true, reason: 'config-change' });
+    showToast('Đã lưu cấu hình và kích hoạt đồng bộ');
+  } else {
+    showToast('Đã lưu cấu hình đồng bộ');
+  }
+}
+
+function handleSyncToggle(evt) {
+  const form = document.getElementById('sync-config-form');
+  if (!form) return;
+  const enabled = evt.target.checked;
+  const urlInput = form.querySelector('[name="remoteUrl"]');
+  const keyInput = form.querySelector('[name="apiKey"]');
+  const methodSelect = form.querySelector('[name="method"]');
+  const intervalInput = form.querySelector('[name="interval"]');
+  [urlInput, keyInput, methodSelect, intervalInput].forEach(input => {
+    if (input) input.disabled = !enabled;
+  });
+  const testButton = document.getElementById('sync-test');
+  if (testButton) testButton.disabled = !enabled;
+  document.querySelectorAll('[data-sync-action]').forEach(button => {
+    const action = button.dataset.syncAction;
+    const requiresRemote = !['export', 'import'].includes(action);
+    button.disabled = requiresRemote ? !enabled : false;
+  });
+  if (!enabled) {
+    state.sync.enabled = false;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    stopRemotePolling();
+  }
+}
+
+function handleSyncTest() {
+  if (!isRemoteSyncEnabled()) {
+    showToast('Vui lòng cấu hình địa chỉ máy chủ trước', true);
+    return;
+  }
+  withLoading('Đang kiểm tra kết nối...', async () => {
+    const success = await pullRemoteState({ silent: true });
+    if (success) {
+      showToast('Kết nối đồng bộ hoạt động bình thường');
+    } else if (!state.sync.lastError) {
+      showToast('Máy chủ phản hồi nhưng không có dữ liệu mới');
+    } else {
+      showToast('Không kiểm tra được máy chủ, vui lòng xem lại cấu hình', true);
+    }
+  });
+}
+
+function handleSyncAction(evt) {
+  const action = evt.target.dataset.syncAction;
+  if (!action) return;
+  if (action === 'export') {
+    exportBackup();
+    return;
+  }
+  if (action === 'import') {
+    document.getElementById('sync-import-input')?.click();
+    return;
+  }
+  if (!isRemoteSyncEnabled()) {
+    showToast('Đồng bộ máy chủ chưa được bật', true);
+    return;
+  }
+  if (action === 'pull') {
+    withLoading('Đang tải dữ liệu từ máy chủ...', async () => {
+      await pullRemoteState({ silent: false });
+    });
+  } else if (action === 'push') {
+    withLoading('Đang gửi dữ liệu lên máy chủ...', async () => {
+      const success = await pushRemoteState({ reason: 'manual' });
+      if (success) {
+        showToast('Đã đồng bộ dữ liệu lên máy chủ');
+      } else {
+        showToast('Không thể gửi dữ liệu lên máy chủ', true);
+      }
+    });
+  }
+}
+
+function exportBackup() {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    data: prepareStateForTransport()
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `klc-backup-${Date.now()}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  showToast('Đã xuất file sao lưu dữ liệu');
+}
+
+function handleImportFile(evt) {
+  const file = evt.target.files?.[0];
+  evt.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const raw = JSON.parse(reader.result);
+      const incoming = raw?.data ?? raw;
+      const normalized = normalizeIncomingState(incoming);
+      state = normalized;
+      state.sync.lastError = null;
+      saveState({ skipRemote: true });
+      applyBranding();
+      if (currentUser) {
+        refreshAll();
+      }
+      renderSyncStatus();
+      updateSyncForm();
+      showToast('Đã khôi phục dữ liệu từ tập tin sao lưu');
+      if (state.sync.enabled) {
+        startRemotePolling();
+      }
+    } catch (error) {
+      console.error('Không thể nhập dữ liệu sao lưu', error);
+      showToast('File sao lưu không hợp lệ', true);
+    }
+  };
+  reader.readAsText(file);
+}
+
 function toggleLayoutEdit() {
   if (currentUser.role !== 'admin') {
     showToast('Chỉ quản trị viên mới chỉnh sửa bố cục', true);
@@ -1116,6 +2085,7 @@ function refreshAll() {
   renderWarranties();
   renderMaintenances();
   renderTaskTemplates();
+  renderTaskSchedule();
   renderTaskReports();
   renderInventory();
   renderFinance();
@@ -1124,7 +2094,10 @@ function refreshAll() {
   populateCustomerHints();
   populateStaffSelectors();
   populateShiftSelectors();
+  populateTaskReportTemplates();
   updateDashboard();
+  renderSyncStatus();
+  updateSyncForm();
 }
 
 function populateCustomerHints() {
@@ -1143,6 +2116,20 @@ function populateStaffSelectors() {
     const select = document.getElementById(id);
     if (select) select.innerHTML = optionHtml;
   });
+  populateScheduleStaffFilter(staffOptions);
+}
+
+function populateScheduleStaffFilter(staffOptions) {
+  const select = document.getElementById('task-schedule-staff');
+  if (!select) return;
+  const previous = select.value;
+  const options = ['<option value="all">Tất cả</option>', ...staffOptions.map(u => `<option value="${u.fullName}">${u.fullName}</option>`)];
+  select.innerHTML = options.join('');
+  if (previous && [...select.options].some(opt => opt.value === previous)) {
+    select.value = previous;
+  } else {
+    select.value = 'all';
+  }
 }
 
 function populateShiftSelectors() {
@@ -1170,7 +2157,9 @@ function openCareFromCustomer() {
   const customer = state.customers.find(c => c.id === id);
   if (!customer) return;
   showPage('care');
-  elements.navLinks.forEach(btn => btn.classList.toggle('active', btn.dataset.target === 'care'));
+  if (location.hash !== '#care') {
+    location.hash = 'care';
+  }
   fillCareForm(customer);
 }
 
@@ -1383,14 +2372,32 @@ function drawFinanceChart() {
   });
 }
 
-function showPageFromHash() {
-  const hash = location.hash.replace('#', '');
-  if (!hash) return;
-  const link = [...elements.navLinks].find(btn => btn.dataset.target === hash);
-  if (link) link.click();
+function updateHashSilently(value) {
+  if (!value) return;
+  if (typeof history !== 'undefined' && typeof history.replaceState === 'function') {
+    history.replaceState(null, '', `#${value}`);
+  } else if (location.hash !== `#${value}`) {
+    location.hash = value;
+  }
 }
 
-window.addEventListener('hashchange', showPageFromHash);
+function showPageFromHash({ silent = false } = {}) {
+  if (!currentUser) return false;
+  const hash = location.hash.replace('#', '');
+  if (!hash) return false;
+  return showPage(hash, { silent });
+}
+
+window.addEventListener('hashchange', () => {
+  if (!currentUser) return;
+  if (!showPageFromHash()) {
+    const fallback = getInitialPage({ preferHash: false });
+    if (fallback) {
+      showPage(fallback, { silent: true });
+      updateHashSilently(fallback);
+    }
+  }
+});
 
 function formatDate(value) {
   if (!value) return '';
