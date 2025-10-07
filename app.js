@@ -65,7 +65,12 @@ function init() {
   renderSyncStatus();
   updateSyncForm();
   attachEventListeners();
+ codex/fix-issues-in-checklist-page-tahi62
   setupSyncListeners();
+
+  setupSyncListeners(); // lắng nghe thay đổi localStorage & BroadcastChannel
+
+ main
   const sourceSelect = document.getElementById('customer-source');
   if (sourceSelect) {
     toggleSourceDetail.call(sourceSelect);
@@ -85,7 +90,10 @@ function loadState() {
 
 function saveState(options = {}) {
   const { skipRemote = false, skipBroadcast = false } = options;
+codex/fix-issues-in-checklist-page-tahi62
   state = ensureStateIntegrity(state);
+
+ main
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   if (!skipBroadcast) {
     broadcastState(skipRemote ? 'meta-update' : 'local-change');
@@ -96,10 +104,17 @@ function saveState(options = {}) {
 }
 
 function parseStoredState(raw) {
+ codex/fix-issues-in-checklist-page-tahi62
   if (!raw) return ensureStateIntegrity(defaultState());
   try {
     const parsed = JSON.parse(raw);
     return ensureStateIntegrity({ ...defaultState(), ...parsed });
+
+  if (!raw) return defaultState();
+  try {
+    const parsed = JSON.parse(raw);
+    return { ...defaultState(), ...parsed };
+ main
   } catch (error) {
     console.error('Không thể tải dữ liệu, khởi tạo mặc định', error);
     return ensureStateIntegrity(defaultState());
@@ -107,7 +122,11 @@ function parseStoredState(raw) {
 }
 
 function handleExternalStateUpdate(raw) {
+ codex/fix-issues-in-checklist-page-tahi62
   const nextState = raw ? parseStoredState(raw) : ensureStateIntegrity(defaultState());
+
+  const nextState = raw ? parseStoredState(raw) : defaultState();
+ main
   if (stateFingerprint(nextState) === stateFingerprint(state)) return;
   state = normalizeIncomingState(nextState);
   applyBranding();
@@ -230,6 +249,7 @@ function attachEventListeners() {
       }
     });
   }
+ codex/fix-issues-in-checklist-page-tahi62
 
   if (document.getElementById('service')) {
     document.querySelectorAll('#service .sub-tab').forEach(tab => tab.addEventListener('click', () => switchSubTab(tab)));
@@ -267,6 +287,45 @@ function attachEventListeners() {
     document.getElementById('finance-export')?.addEventListener('click', exportFinance);
   }
 
+
+
+  if (document.getElementById('service')) {
+    document.querySelectorAll('#service .sub-tab').forEach(tab => tab.addEventListener('click', () => switchSubTab(tab)));
+    document.getElementById('warranty-form')?.addEventListener('submit', evt => handleServiceSubmit(evt, 'warranty'));
+    document.getElementById('maintenance-form')?.addEventListener('submit', evt => handleServiceSubmit(evt, 'maintenance'));
+    document.getElementById('warranty-search')?.addEventListener('input', renderWarranties);
+    document.getElementById('maintenance-search')?.addEventListener('input', renderMaintenances);
+    document.getElementById('service-filter')?.addEventListener('change', renderMaintenances);
+  }
+
+  if (document.getElementById('checklist')) {
+    document.querySelectorAll('#checklist .checklist-link').forEach(btn => btn.addEventListener('click', () => switchChecklistPane(btn.dataset.subpage)));
+    document.getElementById('task-template')?.addEventListener('submit', handleTaskTemplateSubmit);
+    document.getElementById('task-report')?.addEventListener('submit', handleTaskReportSubmit);
+    document.getElementById('task-template-search')?.addEventListener('input', renderTaskTemplates);
+    document.getElementById('task-report-search')?.addEventListener('input', renderTaskReports);
+    document.getElementById('task-report-template')?.addEventListener('change', handleReportTemplateChange);
+    document.getElementById('task-report')?.addEventListener('reset', () => syncReportTemplate(''));
+    document.getElementById('task-schedule-staff')?.addEventListener('change', renderTaskSchedule);
+    document.getElementById('task-schedule-month')?.addEventListener('change', renderTaskSchedule);
+    document.getElementById('task-schedule-reset')?.addEventListener('click', resetTaskScheduleFilters);
+  }
+
+  const inventoryForm = document.getElementById('inventory-form');
+  if (inventoryForm) {
+    inventoryForm.addEventListener('submit', handleInventorySubmit);
+    document.getElementById('inventory-search')?.addEventListener('input', renderInventory);
+    document.getElementById('inventory-filter')?.addEventListener('change', renderInventory);
+  }
+
+  const financeForm = document.getElementById('finance-form');
+  if (financeForm) {
+    financeForm.addEventListener('submit', handleFinanceSubmit);
+    document.getElementById('finance-month')?.addEventListener('change', renderFinanceSummary);
+    document.getElementById('finance-export')?.addEventListener('click', exportFinance);
+  }
+
+ main
   const brandingForm = document.getElementById('branding-form');
   if (brandingForm) {
     brandingForm.addEventListener('submit', handleBrandingSubmit);
@@ -1370,11 +1429,13 @@ function applyBranding() {
   document.title = `${state.siteName} - Hệ thống quản trị nội bộ`;
   document.querySelectorAll('.brand h1').forEach(el => el.textContent = state.siteName);
   if (state.logo) {
-    elements.brandLogo.src = state.logo;
-    document.querySelector('.login-logo').src = state.logo;
+    if (elements.brandLogo) elements.brandLogo.src = state.logo;
+    const loginLogo = document.querySelector('.login-logo');
+    if (loginLogo) loginLogo.src = state.logo;
   } else {
-    elements.brandLogo.src = 'assets/logo.svg';
-    document.querySelector('.login-logo').src = 'assets/logo.svg';
+    if (elements.brandLogo) elements.brandLogo.src = 'assets/logo.svg';
+    const loginLogo = document.querySelector('.login-logo');
+    if (loginLogo) loginLogo.src = 'assets/logo.svg';
   }
 }
 
@@ -1551,6 +1612,10 @@ function renderCollectionName(collection) {
   }[collection] ?? collection;
 }
 
+codex/fix-issues-in-checklist-page-tahi62
+
+/* ====== SYNC UI & LOGIC ====== */
+ main
 function renderSyncStatus() {
   const wrapper = document.getElementById('sync-status');
   const badge = document.getElementById('sync-status-badge');
@@ -1566,6 +1631,7 @@ function renderSyncStatus() {
   ];
   if (config.lastError) {
     lines.push(`<p class="error"><strong>Lỗi gần nhất:</strong> ${config.lastError}</p>`);
+ codex/fix-issues-in-checklist-page-tahi62
   }
   wrapper.innerHTML = lines.join('');
   if (badge) {
@@ -2157,56 +2223,33 @@ function toggleLayoutEdit() {
   if (currentUser.role !== 'admin') {
     showToast('Chỉ quản trị viên mới chỉnh sửa bố cục', true);
     return;
+
+main
   }
-  const enabled = !elements.dashboardWidgets.classList.toggle('editable');
-  const button = document.getElementById('toggle-layout-edit');
-  if (elements.dashboardWidgets.classList.contains('editable')) {
-    button.textContent = 'Tắt chế độ chỉnh sửa';
-    enableDragAndDrop();
-  } else {
-    button.textContent = 'Bật chế độ chỉnh sửa';
-    disableDragAndDrop();
+  wrapper.innerHTML = lines.join('');
+  if (badge) {
+    badge.textContent = enabled ? 'Đã bật' : 'Đang tắt';
+    badge.classList.toggle('online', enabled);
+    badge.classList.toggle('offline', !enabled);
   }
 }
 
-function enableDragAndDrop() {
-  elements.dashboardWidgets.querySelectorAll('.widget').forEach(widget => {
-    widget.setAttribute('draggable', 'true');
-    widget.addEventListener('dragstart', onDragStart);
-    widget.addEventListener('dragover', onDragOver);
-    widget.addEventListener('drop', onDrop);
-  });
-}
-
-function disableDragAndDrop() {
-  elements.dashboardWidgets.querySelectorAll('.widget').forEach(widget => {
-    widget.removeAttribute('draggable');
-    widget.removeEventListener('dragstart', onDragStart);
-    widget.removeEventListener('dragover', onDragOver);
-    widget.removeEventListener('drop', onDrop);
-  });
-}
-
-let draggedWidget = null;
-function onDragStart(evt) {
-  draggedWidget = evt.currentTarget;
-}
-function onDragOver(evt) {
-  evt.preventDefault();
-}
-function onDrop(evt) {
-  evt.preventDefault();
-  if (!draggedWidget) return;
-  const target = evt.currentTarget;
-  if (draggedWidget === target) return;
-  const widgets = [...elements.dashboardWidgets.children];
-  const draggedIndex = widgets.indexOf(draggedWidget);
-  const targetIndex = widgets.indexOf(target);
-  if (draggedIndex < targetIndex) {
-    target.after(draggedWidget);
-  } else {
-    target.before(draggedWidget);
+function updateSyncForm() {
+  const form = document.getElementById('sync-config-form');
+  if (!form) return;
+  const config = state.sync ?? defaultState().sync;
+  const enabledInput = form.querySelector('[name="enabled"]');
+  const urlInput = form.querySelector('[name="remoteUrl"]');
+  const keyInput = form.querySelector('[name="apiKey"]');
+  const methodSelect = form.querySelector('[name="method"]');
+  const intervalInput = form.querySelector('[name="interval"]');
+  const enabled = Boolean(config.enabled);
+  if (enabledInput) enabledInput.checked = enabled;
+  if (urlInput) {
+    urlInput.value = config.remoteUrl ?? '';
+    urlInput.disabled = !enabled;
   }
+ codex/fix-issues-in-checklist-page-tahi62
   draggedWidget = null;
 }
 
@@ -2246,6 +2289,26 @@ function populateStaffSelectors() {
   ['care-staff', 'task-template-staff', 'task-report-staff'].forEach(id => {
     const select = document.getElementById(id);
     if (select) select.innerHTML = optionHtml;
+
+  if (keyInput) {
+    keyInput.value = config.apiKey ?? '';
+    keyInput.disabled = !enabled;
+  }
+  if (methodSelect) {
+    methodSelect.value = (config.method ?? 'PUT').toUpperCase();
+    methodSelect.disabled = !enabled;
+  }
+  if (intervalInput) {
+    intervalInput.value = config.autoPullMinutes ?? 5;
+    intervalInput.disabled = !enabled;
+  }
+  const testButton = document.getElementById('sync-test');
+  if (testButton) testButton.disabled = !enabled;
+  document.querySelectorAll('[data-sync-action]').forEach(button => {
+    const action = button.dataset.syncAction;
+    const requiresRemote = !['export', 'import'].includes(action);
+    button.disabled = requiresRemote ? !enabled : false;
+main
   });
   populateScheduleStaffFilter(staffOptions);
 }
@@ -2263,27 +2326,31 @@ function populateScheduleStaffFilter(staffOptions) {
   }
 }
 
-function populateShiftSelectors() {
-  const templateShift = document.getElementById('task-template-shift');
-  const reportShift = document.getElementById('task-report-shift');
-  if (reportShift && templateShift) {
-    reportShift.innerHTML = templateShift.innerHTML;
-  }
-}
-
-function fillCareForm(customer) {
-  const form = document.getElementById('care-form');
-  form.name.value = customer.name ?? '';
-  form.phone.value = customer.phone ?? '';
-  form.address.value = customer.address ?? '';
-}
-
-function openCareFromCustomer() {
-  const selected = getSelectedRow('customer-table');
-  if (!selected) {
-    showToast('Vui lòng chọn khách hàng từ danh sách', true);
+function scheduleRemoteSync(options = {}) {
+  if (!isRemoteSyncEnabled()) return;
+  const { immediate = false, reason = 'auto' } = options;
+  if (immediate) {
+    pushRemoteState({ reason }).catch(() => {});
     return;
   }
+  clearTimeout(remotePushTimer);
+  remotePushTimer = setTimeout(() => {
+    pushRemoteState({ reason }).catch(() => {});
+  }, REMOTE_PUSH_DEBOUNCE);
+}
+
+function isRemoteSyncEnabled() {
+  const config = state.sync ?? defaultState().sync;
+  return Boolean(config.enabled && config.remoteUrl);
+}
+
+async function pushRemoteState({ reason = 'auto' } = {}) {
+  if (!isRemoteSyncEnabled()) return false;
+  if (remoteSyncInFlight) {
+    pendingRemotePush = true;
+    return false;
+  }
+ codex/fix-issues-in-checklist-page-tahi62
   const id = selected.dataset.id;
   const customer = state.customers.find(c => c.id === id);
   if (!customer) return;
@@ -2398,111 +2465,91 @@ function openServiceModal(type, id) {
     if (partDate && partDetail) {
       item.parts = item.parts ?? [];
       item.parts.push({ date: partDate, detail: partDetail });
+
+  remoteSyncInFlight = true;
+  const config = state.sync;
+  try {
+    const payload = prepareStateForTransport();
+    const response = await fetch(config.remoteUrl, {
+      method: (config.method ?? 'PUT').toUpperCase(),
+      headers: buildSyncHeaders({ includeJson: true }),
+      body: JSON.stringify({
+        reason,
+        updatedAt: new Date().toISOString(),
+        data: payload
+      })
+    });
+    if (!response.ok) {
+      throw new Error(`Máy chủ trả về mã ${response.status}`);
+ main
     }
-    item.notes = formData.get('notes');
-    saveState();
-    renderWarranties();
-    renderMaintenances();
-    modal.remove();
-    showToast('Đã cập nhật trạng thái');
-  });
-  document.body.appendChild(modal);
-}
-
-function openInfoModal(title, body) {
-  const modal = document.createElement('div');
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <header>
-        <h3>${title}</h3>
-        <button class="icon" data-close>&times;</button>
-      </header>
-      <div>${body}</div>
-    </div>`;
-  document.body.appendChild(modal);
-}
-
-function updateDashboard() {
-  document.getElementById('total-customers').textContent = state.customers.length;
-  document.getElementById('total-care').textContent = state.care.length;
-  document.getElementById('total-service').textContent = state.warranties.length + state.maintenances.length;
-  const income = state.finance.filter(i => i.type === 'income').reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  const expense = state.finance.filter(i => i.type === 'expense').reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  document.getElementById('finance-balance').textContent = `${(income - expense).toLocaleString('vi-VN')} đ`;
-  drawCharts();
-}
-
-function drawCharts() {
-  drawLineChart('customer-growth', aggregateByMonth(state.customers, 'date'), 'Khách hàng mới');
-  drawLineChart('care-chart', aggregateByMonth(state.care, 'date'), 'CSKH');
-  drawLineChart('service-chart', aggregateByMonth([...state.warranties, ...state.maintenances], 'date'), 'Bảo hành/Bảo dưỡng');
-  drawFinanceChart();
-}
-
-function aggregateByMonth(list, field) {
-  const map = new Map();
-  list.forEach(item => {
-    const date = item[field] || item.createdAt;
-    if (!date) return;
-    const d = new Date(date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    map.set(key, (map.get(key) || 0) + 1);
-  });
-  return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-}
-
-function drawLineChart(canvasId, data, label) {
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  if (charts[canvasId]) charts[canvasId].destroy();
-  charts[canvasId] = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: data.map(([key]) => key),
-      datasets: [{
-        label,
-        data: data.map(([, value]) => value),
-        borderColor: getComputedStyle(document.documentElement).getPropertyValue('--primary'),
-        tension: 0.35,
-        fill: false
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } }
+    const pushedAt = new Date().toISOString();
+    state.sync.lastPush = pushedAt;
+    state.sync.lastError = null;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    return true;
+  } catch (error) {
+    state.sync.lastError = error.message;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    console.error('Đẩy dữ liệu lên máy chủ thất bại', error);
+    return false;
+  } finally {
+    remoteSyncInFlight = false;
+    if (pendingRemotePush) {
+      pendingRemotePush = false;
+      scheduleRemoteSync({ immediate: true, reason: 'retry' });
     }
-  });
+  }
 }
 
-function drawFinanceChart() {
-  const canvasId = 'finance-chart';
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  if (charts[canvasId]) charts[canvasId].destroy();
-  const income = state.finance.filter(i => i.type === 'income').reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  const expense = state.finance.filter(i => i.type === 'expense').reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  charts[canvasId] = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: ['Thu', 'Chi'],
-      datasets: [{
-        data: [income, expense],
-        backgroundColor: [
-          shadeColor(state.primaryColor, -10),
-          '#f39c12'
-        ]
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom' } }
+async function pullRemoteState({ silent = false } = {}) {
+  if (!isRemoteSyncEnabled()) return false;
+  const config = state.sync;
+  try {
+    const response = await fetch(config.remoteUrl, {
+      method: 'GET',
+      headers: buildSyncHeaders(),
+      cache: 'no-store'
+    });
+    if (!response.ok) {
+      throw new Error(`Máy chủ trả về mã ${response.status}`);
     }
-  });
+    const payload = await response.json();
+    const remoteState = payload?.data ?? payload?.state ?? payload;
+    if (!remoteState || typeof remoteState !== 'object') {
+      throw new Error('Dữ liệu phản hồi không hợp lệ');
+    }
+    const normalizedRemote = normalizeIncomingState(remoteState);
+    const hasChanged = stateFingerprint(normalizedRemote) !== stateFingerprint(state);
+    state = normalizedRemote;
+    state.sync.lastPull = new Date().toISOString();
+    state.sync.lastError = null;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    applyBranding();
+    if (currentUser) {
+      refreshAll();
+      if (!silent && hasChanged) {
+        showToast('Đã cập nhật dữ liệu từ máy chủ');
+      }
+    }
+    startRemotePolling();
+    return hasChanged;
+  } catch (error) {
+    state.sync.lastError = error.message;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    if (!silent) {
+      showToast('Không thể tải dữ liệu từ máy chủ đồng bộ', true);
+    }
+    console.error('Không thể lấy dữ liệu từ máy chủ đồng bộ', error);
+    return false;
+  }
 }
 
+ codex/fix-issues-in-checklist-page-tahi62
 function updateHashSilently(value) {
   if (!value) return;
   if (typeof history !== 'undefined' && typeof history.replaceState === 'function') {
@@ -2581,3 +2628,9 @@ style.textContent = `
 .toast.visible { opacity: 1; transform: translateY(0); }
 `;
 document.head.appendChild(style);
+
+function startRemotePolling() {
+  clearInterval(remotePullTimer);
+  if (!isRemoteSyncEnabled()) return;
+  const interval = Math.max(1, Number(state.sync?.autoPull
+ main
