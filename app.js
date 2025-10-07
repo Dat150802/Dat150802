@@ -65,8 +65,12 @@ function init() {
   renderSyncStatus();
   updateSyncForm();
   attachEventListeners();
+ codex/fix-issues-in-checklist-page-tahi62
+  setupSyncListeners();
+
   setupSyncListeners(); // lắng nghe thay đổi localStorage & BroadcastChannel
 
+ main
   const sourceSelect = document.getElementById('customer-source');
   if (sourceSelect) {
     toggleSourceDetail.call(sourceSelect);
@@ -86,6 +90,10 @@ function loadState() {
 
 function saveState(options = {}) {
   const { skipRemote = false, skipBroadcast = false } = options;
+codex/fix-issues-in-checklist-page-tahi62
+  state = ensureStateIntegrity(state);
+
+ main
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   if (!skipBroadcast) {
     broadcastState(skipRemote ? 'meta-update' : 'local-change');
@@ -96,18 +104,29 @@ function saveState(options = {}) {
 }
 
 function parseStoredState(raw) {
+ codex/fix-issues-in-checklist-page-tahi62
+  if (!raw) return ensureStateIntegrity(defaultState());
+  try {
+    const parsed = JSON.parse(raw);
+    return ensureStateIntegrity({ ...defaultState(), ...parsed });
+
   if (!raw) return defaultState();
   try {
     const parsed = JSON.parse(raw);
     return { ...defaultState(), ...parsed };
+ main
   } catch (error) {
     console.error('Không thể tải dữ liệu, khởi tạo mặc định', error);
-    return defaultState();
+    return ensureStateIntegrity(defaultState());
   }
 }
 
 function handleExternalStateUpdate(raw) {
+ codex/fix-issues-in-checklist-page-tahi62
+  const nextState = raw ? parseStoredState(raw) : ensureStateIntegrity(defaultState());
+
   const nextState = raw ? parseStoredState(raw) : defaultState();
+ main
   if (stateFingerprint(nextState) === stateFingerprint(state)) return;
   state = normalizeIncomingState(nextState);
   applyBranding();
@@ -230,6 +249,7 @@ function attachEventListeners() {
       }
     });
   }
+ codex/fix-issues-in-checklist-page-tahi62
 
   if (document.getElementById('service')) {
     document.querySelectorAll('#service .sub-tab').forEach(tab => tab.addEventListener('click', () => switchSubTab(tab)));
@@ -267,6 +287,45 @@ function attachEventListeners() {
     document.getElementById('finance-export')?.addEventListener('click', exportFinance);
   }
 
+
+
+  if (document.getElementById('service')) {
+    document.querySelectorAll('#service .sub-tab').forEach(tab => tab.addEventListener('click', () => switchSubTab(tab)));
+    document.getElementById('warranty-form')?.addEventListener('submit', evt => handleServiceSubmit(evt, 'warranty'));
+    document.getElementById('maintenance-form')?.addEventListener('submit', evt => handleServiceSubmit(evt, 'maintenance'));
+    document.getElementById('warranty-search')?.addEventListener('input', renderWarranties);
+    document.getElementById('maintenance-search')?.addEventListener('input', renderMaintenances);
+    document.getElementById('service-filter')?.addEventListener('change', renderMaintenances);
+  }
+
+  if (document.getElementById('checklist')) {
+    document.querySelectorAll('#checklist .checklist-link').forEach(btn => btn.addEventListener('click', () => switchChecklistPane(btn.dataset.subpage)));
+    document.getElementById('task-template')?.addEventListener('submit', handleTaskTemplateSubmit);
+    document.getElementById('task-report')?.addEventListener('submit', handleTaskReportSubmit);
+    document.getElementById('task-template-search')?.addEventListener('input', renderTaskTemplates);
+    document.getElementById('task-report-search')?.addEventListener('input', renderTaskReports);
+    document.getElementById('task-report-template')?.addEventListener('change', handleReportTemplateChange);
+    document.getElementById('task-report')?.addEventListener('reset', () => syncReportTemplate(''));
+    document.getElementById('task-schedule-staff')?.addEventListener('change', renderTaskSchedule);
+    document.getElementById('task-schedule-month')?.addEventListener('change', renderTaskSchedule);
+    document.getElementById('task-schedule-reset')?.addEventListener('click', resetTaskScheduleFilters);
+  }
+
+  const inventoryForm = document.getElementById('inventory-form');
+  if (inventoryForm) {
+    inventoryForm.addEventListener('submit', handleInventorySubmit);
+    document.getElementById('inventory-search')?.addEventListener('input', renderInventory);
+    document.getElementById('inventory-filter')?.addEventListener('change', renderInventory);
+  }
+
+  const financeForm = document.getElementById('finance-form');
+  if (financeForm) {
+    financeForm.addEventListener('submit', handleFinanceSubmit);
+    document.getElementById('finance-month')?.addEventListener('change', renderFinanceSummary);
+    document.getElementById('finance-export')?.addEventListener('click', exportFinance);
+  }
+
+ main
   const brandingForm = document.getElementById('branding-form');
   if (brandingForm) {
     brandingForm.addEventListener('submit', handleBrandingSubmit);
@@ -380,7 +439,27 @@ function handleLogin(evt) {
   const password = document.getElementById('login-password').value.trim();
   const remember = document.getElementById('remember-me').checked;
   const staySigned = document.getElementById('stay-signed').checked;
-  const user = state.users.find(u => u.username === username && u.password === password);
+  state = ensureStateIntegrity(state);
+  let user = state.users.find(u => u.username === username && u.password === password);
+  if (!user) {
+    const fallback = defaultState().users.find(
+      u => u.username === username && u.password === password
+    );
+    const existing = state.users.find(u => u.username === username);
+    if (fallback && !existing) {
+      user = { ...fallback };
+      state.users.push(user);
+      saveState();
+      user = state.users.find(u => u.username === username && u.password === password);
+    } else if (fallback && existing) {
+      existing.password = fallback.password;
+      existing.role = existing.role || fallback.role;
+      existing.fullName = existing.fullName || fallback.fullName;
+      existing.updatedAt = new Date().toISOString();
+      saveState();
+      user = state.users.find(u => u.username === username && u.password === password);
+    }
+  }
   withLoading('Đang kiểm tra tài khoản...', () => {
     if (!user) {
       showToast('Sai tài khoản hoặc mật khẩu', true);
@@ -465,6 +544,7 @@ function handleCustomerSubmit(evt) {
     data.id = crypto.randomUUID();
     data.createdBy = currentUser.username;
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     data.hasPurchased = !!form.hasPurchased.checked;
     state.customers.push(data);
     saveState();
@@ -555,6 +635,7 @@ function handleCareSubmit(evt) {
     const data = Object.fromEntries(new FormData(form));
     data.id = crypto.randomUUID();
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     data.createdBy = currentUser.username;
     if (data.rating !== 'lost') delete data.lostReason;
     if (data.rating !== 'scheduled') {
@@ -651,6 +732,7 @@ function handleServiceSubmit(evt, type) {
     data.id = crypto.randomUUID();
     data.type = type;
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     data.status = 'pending';
     data.parts = [];
     data.supported = false;
@@ -747,6 +829,7 @@ function handleTaskTemplateSubmit(evt) {
     data.id = crypto.randomUUID();
     data.tasks = data.tasks.split('\n').map(t => t.trim()).filter(Boolean);
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     state.tasks.templates.push(data);
     saveState();
     evt.target.reset();
@@ -781,6 +864,7 @@ function handleTaskReportSubmit(evt) {
     }
     data.id = crypto.randomUUID();
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     state.tasks.reports.push(data);
     saveState();
     evt.target.reset();
@@ -1168,6 +1252,7 @@ function handleInventorySubmit(evt) {
     const data = Object.fromEntries(new FormData(evt.target));
     data.id = crypto.randomUUID();
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     state.inventory.push(data);
     saveState();
     evt.target.reset();
@@ -1226,6 +1311,7 @@ function handleFinanceSubmit(evt) {
     const data = Object.fromEntries(new FormData(evt.target));
     data.id = crypto.randomUUID();
     data.createdAt = new Date().toISOString();
+    data.updatedAt = data.createdAt;
     state.finance.push(data);
     saveState();
     evt.target.reset();
@@ -1361,13 +1447,31 @@ function handleStaffSubmit(evt) {
   }
   withLoading('Đang lưu nhân sự...', () => {
     const data = Object.fromEntries(new FormData(evt.target));
-    const existing = state.users.find(u => u.username === data.username);
+    const username = (data.username || '').trim();
+    if (!username) {
+      showToast('Vui lòng nhập tài khoản hợp lệ', true);
+      return;
+    }
+    if (!data.password) {
+      showToast('Vui lòng nhập mật khẩu', true);
+      return;
+    }
+    const existing = state.users.find(u => u.username === username);
+    const timestamp = new Date().toISOString();
     if (existing) {
       existing.password = data.password;
-      existing.fullName = data.fullName;
+      existing.fullName = data.fullName || username;
       existing.role = data.role;
+      existing.updatedAt = timestamp;
     } else {
-      state.users.push({ ...data });
+      state.users.push({
+        username,
+        password: data.password,
+        fullName: data.fullName || username,
+        role: data.role,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      });
     }
     saveState();
     evt.target.reset();
@@ -1508,7 +1612,10 @@ function renderCollectionName(collection) {
   }[collection] ?? collection;
 }
 
+codex/fix-issues-in-checklist-page-tahi62
+
 /* ====== SYNC UI & LOGIC ====== */
+ main
 function renderSyncStatus() {
   const wrapper = document.getElementById('sync-status');
   const badge = document.getElementById('sync-status-badge');
@@ -1524,6 +1631,7 @@ function renderSyncStatus() {
   ];
   if (config.lastError) {
     lines.push(`<p class="error"><strong>Lỗi gần nhất:</strong> ${config.lastError}</p>`);
+ codex/fix-issues-in-checklist-page-tahi62
   }
   wrapper.innerHTML = lines.join('');
   if (badge) {
@@ -1596,6 +1704,771 @@ async function pushRemoteState({ reason = 'auto' } = {}) {
   remoteSyncInFlight = true;
   const config = state.sync;
   try {
+    let payload = prepareStateForTransport();
+    try {
+      const remoteSnapshot = await fetchRemoteState();
+      payload = mergeStateSnapshots(payload, remoteSnapshot);
+    } catch (mergeError) {
+      console.warn('Không thể hợp nhất dữ liệu từ máy chủ, sử dụng dữ liệu cục bộ', mergeError);
+    }
+    const response = await fetch(config.remoteUrl, {
+      method: (config.method ?? 'PUT').toUpperCase(),
+      headers: buildSyncHeaders({ includeJson: true }),
+      body: JSON.stringify({
+        reason,
+        updatedAt: new Date().toISOString(),
+        data: payload
+      })
+    });
+    if (!response.ok) {
+      throw new Error(`Máy chủ trả về mã ${response.status}`);
+    }
+    const pushedAt = new Date().toISOString();
+    state.sync.lastPush = pushedAt;
+    state.sync.lastError = null;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    return true;
+  } catch (error) {
+    state.sync.lastError = error.message;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    console.error('Đẩy dữ liệu lên máy chủ thất bại', error);
+    return false;
+  } finally {
+    remoteSyncInFlight = false;
+    if (pendingRemotePush) {
+      pendingRemotePush = false;
+      scheduleRemoteSync({ immediate: true, reason: 'retry' });
+    }
+  }
+}
+
+async function pullRemoteState({ silent = false } = {}) {
+  if (!isRemoteSyncEnabled()) return false;
+  try {
+    const remoteState = await fetchRemoteState();
+    const merged = mergeStateSnapshots(state, remoteState);
+    const hasChanged = stateFingerprint(merged) !== stateFingerprint(state);
+    state = merged;
+    state.sync.lastPull = new Date().toISOString();
+    state.sync.lastError = null;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    applyBranding();
+    if (currentUser) {
+      refreshAll();
+      if (!silent && hasChanged) {
+        showToast('Đã cập nhật dữ liệu từ máy chủ');
+      }
+    }
+    startRemotePolling();
+    return hasChanged;
+  } catch (error) {
+    state.sync.lastError = error.message;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    if (!silent) {
+      showToast('Không thể tải dữ liệu từ máy chủ đồng bộ', true);
+    }
+    console.error('Không thể lấy dữ liệu từ máy chủ đồng bộ', error);
+    return false;
+  }
+}
+
+async function fetchRemoteState() {
+  const config = state.sync;
+  const response = await fetch(config.remoteUrl, {
+    method: 'GET',
+    headers: buildSyncHeaders(),
+    cache: 'no-store'
+  });
+  if (!response.ok) {
+    throw new Error(`Máy chủ trả về mã ${response.status}`);
+  }
+  const payload = await response.json();
+  const remoteState = payload?.data ?? payload?.state ?? payload;
+  if (!remoteState || typeof remoteState !== 'object') {
+    throw new Error('Dữ liệu phản hồi không hợp lệ');
+  }
+  return remoteState;
+}
+
+function startRemotePolling() {
+  clearInterval(remotePullTimer);
+  if (!isRemoteSyncEnabled()) return;
+  const interval = Math.max(1, Number(state.sync?.autoPullMinutes) || 5) * 60000;
+  remotePullTimer = setInterval(() => {
+    pullRemoteState({ silent: true });
+  }, interval);
+}
+
+function stopRemotePolling() {
+  clearInterval(remotePullTimer);
+  remotePullTimer = null;
+}
+
+function prepareStateForTransport() {
+  const cleaned = ensureStateIntegrity(state);
+  const clone = JSON.parse(JSON.stringify(cleaned));
+  if (!clone.sync) {
+    clone.sync = { ...defaultState().sync };
+  }
+  delete clone.sync.lastError;
+  delete clone.sync.lastPull;
+  delete clone.sync.lastPush;
+  return clone;
+}
+
+function normalizeIncomingState(nextState) {
+  const parsed = parseStoredState(JSON.stringify(nextState));
+  const localSync = state?.sync ?? defaultState().sync;
+  const incomingSync = parsed.sync ?? {};
+  return {
+    ...parsed,
+    sync: {
+      ...localSync,
+      ...incomingSync,
+      enabled: incomingSync.enabled ?? localSync.enabled,
+      remoteUrl: incomingSync.remoteUrl ?? localSync.remoteUrl,
+      apiKey: incomingSync.apiKey ?? localSync.apiKey,
+      method: (incomingSync.method ?? localSync.method ?? 'PUT').toUpperCase()
+    }
+  };
+}
+
+function mergeStateSnapshots(primarySnapshot, secondarySnapshot) {
+  const primary = ensureStateIntegrity(primarySnapshot);
+  const secondary = ensureStateIntegrity(secondarySnapshot);
+  const merged = {
+    ...primary,
+    ...secondary,
+    users: normalizeUsers(
+      [...primary.users, ...secondary.users],
+      defaultState().users
+    ),
+    customers: mergeCollections(primary.customers, secondary.customers),
+    care: mergeCollections(primary.care, secondary.care),
+    warranties: mergeCollections(primary.warranties, secondary.warranties),
+    maintenances: mergeCollections(primary.maintenances, secondary.maintenances),
+    inventory: mergeCollections(primary.inventory, secondary.inventory),
+    finance: mergeCollections(primary.finance, secondary.finance),
+    approvals: mergeCollections(primary.approvals, secondary.approvals),
+    tasks: {
+      templates: mergeTaskTemplates(primary.tasks.templates, secondary.tasks.templates),
+      reports: mergeTaskReports(primary.tasks.reports, secondary.tasks.reports)
+    },
+    sync: mergeSyncConfig(primary.sync, secondary.sync)
+  };
+  return ensureStateIntegrity(merged);
+}
+
+function mergeCollections(primary = [], secondary = []) {
+  return normalizeCollection([...primary, ...secondary], []);
+}
+
+function mergeTaskTemplates(primary = [], secondary = []) {
+  return mergeCollections(primary, secondary).map(template => ({
+    ...template,
+    steps: ensureArray(template?.steps),
+    tasks: ensureArray(template?.tasks),
+    checklist: ensureArray(template?.checklist)
+  }));
+}
+
+function mergeTaskReports(primary = [], secondary = []) {
+  return mergeCollections(primary, secondary).map(report => ({
+    ...report,
+    items: ensureArray(report?.items),
+    results: ensureArray(report?.results),
+    tasks: ensureArray(report?.tasks)
+  }));
+}
+
+function mergeSyncConfig(primary = {}, secondary = {}) {
+  const base = defaultState().sync;
+  const normalizedPrimary = { ...base, ...primary };
+  const normalizedSecondary = { ...base, ...secondary };
+  const resolvedEnabled =
+    typeof primary?.enabled === 'boolean'
+      ? primary.enabled
+      : (typeof secondary?.enabled === 'boolean' ? secondary.enabled : base.enabled);
+  return {
+    ...base,
+    ...normalizedSecondary,
+    ...normalizedPrimary,
+    enabled: resolvedEnabled,
+    remoteUrl: normalizedPrimary.remoteUrl || normalizedSecondary.remoteUrl || base.remoteUrl,
+    apiKey: normalizedPrimary.apiKey || normalizedSecondary.apiKey || base.apiKey,
+    method: (normalizedPrimary.method || normalizedSecondary.method || base.method || 'PUT').toUpperCase(),
+    autoPullMinutes:
+      Number(normalizedPrimary.autoPullMinutes) ||
+      Number(normalizedSecondary.autoPullMinutes) ||
+      base.autoPullMinutes,
+    lastPush: maxTimestamp(normalizedPrimary.lastPush, normalizedSecondary.lastPush),
+    lastPull: maxTimestamp(normalizedPrimary.lastPull, normalizedSecondary.lastPull),
+    lastError: normalizedPrimary.lastError || normalizedSecondary.lastError || null
+  };
+}
+
+function maxTimestamp(a, b) {
+  const aTime = Number.isNaN(Date.parse(a ?? '')) ? null : Date.parse(a);
+  const bTime = Number.isNaN(Date.parse(b ?? '')) ? null : Date.parse(b);
+  if (aTime === null && bTime === null) return null;
+  if (aTime !== null && bTime !== null) {
+    return aTime >= bTime ? a : b;
+  }
+  return aTime !== null ? a : b;
+}
+
+function ensureStateIntegrity(snapshot) {
+  const base = defaultState();
+  const source = snapshot && typeof snapshot === 'object' ? snapshot : {};
+  const normalized = {
+    ...base,
+    ...source
+  };
+
+  normalized.users = normalizeUsers(source.users, base.users);
+  normalized.customers = normalizeCollection(source.customers, base.customers);
+  normalized.care = normalizeCollection(source.care, base.care);
+  normalized.warranties = normalizeCollection(source.warranties, base.warranties);
+  normalized.maintenances = normalizeCollection(source.maintenances, base.maintenances);
+  normalized.inventory = normalizeCollection(source.inventory, base.inventory);
+  normalized.finance = normalizeCollection(source.finance, base.finance);
+  normalized.approvals = normalizeCollection(source.approvals, base.approvals);
+  normalized.tasks = {
+    templates: normalizeCollection(source?.tasks?.templates, base.tasks.templates).map(template => ({
+      ...template,
+      steps: ensureArray(template?.steps),
+      tasks: ensureArray(template?.tasks),
+      checklist: ensureArray(template?.checklist)
+    })),
+    reports: normalizeCollection(source?.tasks?.reports, base.tasks.reports).map(report => ({
+      ...report,
+      items: ensureArray(report?.items),
+      results: ensureArray(report?.results),
+      tasks: ensureArray(report?.tasks)
+    }))
+  };
+  normalized.sync = {
+    ...base.sync,
+    ...(source.sync ?? {})
+  };
+  return normalized;
+}
+
+function ensureArray(value, fallback = []) {
+  if (!Array.isArray(value)) return [...fallback];
+  return value.filter(item => item !== undefined && item !== null).map(item =>
+    typeof item === 'object' ? { ...item } : item
+  );
+}
+
+function normalizeCollection(value, fallback = []) {
+  const items = ensureArray(value, fallback);
+  const map = new Map();
+  items.forEach(item => {
+    if (!item || typeof item !== 'object') return;
+    const record = { ...item };
+    const key = record.id ?? record.username ?? JSON.stringify(record);
+    if (!map.has(key)) {
+      map.set(key, record);
+      return;
+    }
+    const existing = map.get(key);
+    const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+    const incomingTime = new Date(record.updatedAt || record.createdAt || 0).getTime();
+    if (incomingTime >= existingTime) {
+      map.set(key, { ...existing, ...record });
+    }
+  });
+  return [...map.values()];
+}
+
+function normalizeUsers(value, fallback = []) {
+  const defaults = ensureArray(fallback);
+  const provided = ensureArray(value);
+  const map = new Map();
+  provided.forEach(user => {
+    if (!user || typeof user !== 'object') return;
+    const username = String(user.username || '').trim();
+    if (!username) return;
+    const sanitized = {
+      username,
+      password: String(user.password ?? ''),
+      role: user.role === 'admin' ? 'admin' : 'employee',
+      fullName: user.fullName || username,
+      createdAt: user.createdAt || user.updatedAt || new Date().toISOString(),
+      updatedAt: user.updatedAt || user.createdAt || new Date().toISOString()
+    };
+    const existing = map.get(username);
+    if (!existing) {
+      map.set(username, sanitized);
+      return;
+    }
+    const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+    const incomingTime = new Date(sanitized.updatedAt || sanitized.createdAt || 0).getTime();
+    if (incomingTime >= existingTime) {
+      const mergedUser = { ...existing, ...sanitized };
+      if (!sanitized.password) {
+        mergedUser.password = existing.password;
+      }
+      if (!sanitized.createdAt) {
+        mergedUser.createdAt = existing.createdAt;
+      }
+      map.set(username, mergedUser);
+    }
+  });
+  defaults.forEach(user => {
+    const username = String(user.username || '').trim();
+    if (!username) return;
+    const existing = map.get(username);
+    if (!existing) {
+      map.set(username, { ...user });
+      return;
+    }
+    if (!existing.password) existing.password = user.password;
+    if (!existing.role) existing.role = user.role;
+    if (!existing.fullName) existing.fullName = user.fullName;
+  });
+  return [...map.values()].filter(user => user.password);
+}
+
+function stateFingerprint(target) {
+  const snapshot = JSON.parse(JSON.stringify(target ?? {}));
+  if (snapshot.sync) {
+    delete snapshot.sync.lastPull;
+    delete snapshot.sync.lastPush;
+    delete snapshot.sync.lastError;
+  }
+  return JSON.stringify(snapshot);
+}
+
+function buildSyncHeaders({ includeJson = false } = {}) {
+  const headers = {};
+  if (includeJson) headers['Content-Type'] = 'application/json';
+  if (state.sync?.apiKey) {
+    headers.Authorization = `Bearer ${state.sync.apiKey}`;
+  }
+  return headers;
+}
+
+function handleSyncConfigSubmit(evt) {
+  evt.preventDefault();
+  const form = evt.target;
+  const enabledInput = form.querySelector('[name="enabled"]');
+  const urlInput = form.querySelector('[name="remoteUrl"]');
+  const keyInput = form.querySelector('[name="apiKey"]');
+  const methodSelect = form.querySelector('[name="method"]');
+  const intervalInput = form.querySelector('[name="interval"]');
+  const enabled = enabledInput?.checked ?? false;
+  const remoteUrl = urlInput?.value.trim() ?? '';
+  const apiKey = keyInput?.value.trim() ?? '';
+  const method = (methodSelect?.value ?? 'PUT').toUpperCase();
+  const autoPullMinutes = Math.max(1, Number(intervalInput?.value) || 5);
+  if (enabled && !remoteUrl) {
+    showToast('Vui lòng nhập địa chỉ máy chủ trước khi bật đồng bộ', true);
+    enabledInput.checked = false;
+    handleSyncToggle({ target: enabledInput });
+    return;
+  }
+  state.sync = {
+    ...state.sync,
+    enabled: enabled && !!remoteUrl,
+    remoteUrl,
+    apiKey,
+    method,
+    autoPullMinutes
+  };
+  if (!state.sync.enabled) {
+    stopRemotePolling();
+  }
+  saveState({ skipRemote: true });
+  updateSyncForm();
+  renderSyncStatus();
+  if (state.sync.enabled) {
+    startRemotePolling();
+    pullRemoteState({ silent: true });
+    scheduleRemoteSync({ immediate: true, reason: 'config-change' });
+    showToast('Đã lưu cấu hình và kích hoạt đồng bộ');
+  } else {
+    showToast('Đã lưu cấu hình đồng bộ');
+  }
+}
+
+function handleSyncToggle(evt) {
+  const form = document.getElementById('sync-config-form');
+  if (!form) return;
+  const enabled = evt.target.checked;
+  const urlInput = form.querySelector('[name="remoteUrl"]');
+  const keyInput = form.querySelector('[name="apiKey"]');
+  const methodSelect = form.querySelector('[name="method"]');
+  const intervalInput = form.querySelector('[name="interval"]');
+  [urlInput, keyInput, methodSelect, intervalInput].forEach(input => {
+    if (input) input.disabled = !enabled;
+  });
+  const testButton = document.getElementById('sync-test');
+  if (testButton) testButton.disabled = !enabled;
+  document.querySelectorAll('[data-sync-action]').forEach(button => {
+    const action = button.dataset.syncAction;
+    const requiresRemote = !['export', 'import'].includes(action);
+    button.disabled = requiresRemote ? !enabled : false;
+  });
+  if (!enabled) {
+    state.sync.enabled = false;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    stopRemotePolling();
+  }
+}
+
+function handleSyncTest() {
+  if (!isRemoteSyncEnabled()) {
+    showToast('Vui lòng cấu hình địa chỉ máy chủ trước', true);
+    return;
+  }
+  withLoading('Đang kiểm tra kết nối...', async () => {
+    const success = await pullRemoteState({ silent: true });
+    if (success) {
+      showToast('Kết nối đồng bộ hoạt động bình thường');
+    } else if (!state.sync.lastError) {
+      showToast('Máy chủ phản hồi nhưng không có dữ liệu mới');
+    } else {
+      showToast('Không kiểm tra được máy chủ, vui lòng xem lại cấu hình', true);
+    }
+  });
+}
+
+function handleSyncAction(evt) {
+  const action = evt.target.dataset.syncAction;
+  if (!action) return;
+  if (action === 'export') {
+    exportBackup();
+    return;
+  }
+  if (action === 'import') {
+    document.getElementById('sync-import-input')?.click();
+    return;
+  }
+  if (!isRemoteSyncEnabled()) {
+    showToast('Đồng bộ máy chủ chưa được bật', true);
+    return;
+  }
+  if (action === 'pull') {
+    withLoading('Đang tải dữ liệu từ máy chủ...', async () => {
+      await pullRemoteState({ silent: false });
+    });
+  } else if (action === 'push') {
+    withLoading('Đang gửi dữ liệu lên máy chủ...', async () => {
+      const success = await pushRemoteState({ reason: 'manual' });
+      if (success) {
+        showToast('Đã đồng bộ dữ liệu lên máy chủ');
+      } else {
+        showToast('Không thể gửi dữ liệu lên máy chủ', true);
+      }
+    });
+  }
+}
+
+function exportBackup() {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    data: prepareStateForTransport()
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `klc-backup-${Date.now()}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  showToast('Đã xuất file sao lưu dữ liệu');
+}
+
+function handleImportFile(evt) {
+  const file = evt.target.files?.[0];
+  evt.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const raw = JSON.parse(reader.result);
+      const incoming = raw?.data ?? raw;
+      const normalized = normalizeIncomingState(incoming);
+      state = normalized;
+      state.sync.lastError = null;
+      saveState({ skipRemote: true });
+      applyBranding();
+      if (currentUser) {
+        refreshAll();
+      }
+      renderSyncStatus();
+      updateSyncForm();
+      showToast('Đã khôi phục dữ liệu từ tập tin sao lưu');
+      if (state.sync.enabled) {
+        startRemotePolling();
+      }
+    } catch (error) {
+      console.error('Không thể nhập dữ liệu sao lưu', error);
+      showToast('File sao lưu không hợp lệ', true);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function toggleLayoutEdit() {
+  if (currentUser.role !== 'admin') {
+    showToast('Chỉ quản trị viên mới chỉnh sửa bố cục', true);
+    return;
+
+main
+  }
+  wrapper.innerHTML = lines.join('');
+  if (badge) {
+    badge.textContent = enabled ? 'Đã bật' : 'Đang tắt';
+    badge.classList.toggle('online', enabled);
+    badge.classList.toggle('offline', !enabled);
+  }
+}
+
+function updateSyncForm() {
+  const form = document.getElementById('sync-config-form');
+  if (!form) return;
+  const config = state.sync ?? defaultState().sync;
+  const enabledInput = form.querySelector('[name="enabled"]');
+  const urlInput = form.querySelector('[name="remoteUrl"]');
+  const keyInput = form.querySelector('[name="apiKey"]');
+  const methodSelect = form.querySelector('[name="method"]');
+  const intervalInput = form.querySelector('[name="interval"]');
+  const enabled = Boolean(config.enabled);
+  if (enabledInput) enabledInput.checked = enabled;
+  if (urlInput) {
+    urlInput.value = config.remoteUrl ?? '';
+    urlInput.disabled = !enabled;
+  }
+ codex/fix-issues-in-checklist-page-tahi62
+  draggedWidget = null;
+}
+
+function refreshAll() {
+  renderCustomers();
+  renderCare();
+  renderWarranties();
+  renderMaintenances();
+  renderTaskTemplates();
+  renderTaskSchedule();
+  renderTaskReports();
+  renderInventory();
+  renderFinance();
+  renderStaff();
+  renderApprovals();
+  populateCustomerHints();
+  populateStaffSelectors();
+  populateShiftSelectors();
+  populateTaskReportTemplates();
+  updateDashboard();
+  renderSyncStatus();
+  updateSyncForm();
+}
+
+function populateCustomerHints() {
+  const nameList = document.getElementById('customer-names');
+  const phoneList = document.getElementById('customer-phones');
+  const optionsName = state.customers.map(c => `<option value="${c.name}"></option>`).join('');
+  const optionsPhone = state.customers.map(c => `<option value="${c.phone}"></option>`).join('');
+  nameList.innerHTML = optionsName;
+  phoneList.innerHTML = optionsPhone;
+}
+
+function populateStaffSelectors() {
+  const staffOptions = state.users.filter(u => u.role !== 'admin' || currentUser.role === 'admin');
+  const optionHtml = staffOptions.map(u => `<option value="${u.fullName}">${u.fullName}</option>`).join('');
+  ['care-staff', 'task-template-staff', 'task-report-staff'].forEach(id => {
+    const select = document.getElementById(id);
+    if (select) select.innerHTML = optionHtml;
+
+  if (keyInput) {
+    keyInput.value = config.apiKey ?? '';
+    keyInput.disabled = !enabled;
+  }
+  if (methodSelect) {
+    methodSelect.value = (config.method ?? 'PUT').toUpperCase();
+    methodSelect.disabled = !enabled;
+  }
+  if (intervalInput) {
+    intervalInput.value = config.autoPullMinutes ?? 5;
+    intervalInput.disabled = !enabled;
+  }
+  const testButton = document.getElementById('sync-test');
+  if (testButton) testButton.disabled = !enabled;
+  document.querySelectorAll('[data-sync-action]').forEach(button => {
+    const action = button.dataset.syncAction;
+    const requiresRemote = !['export', 'import'].includes(action);
+    button.disabled = requiresRemote ? !enabled : false;
+main
+  });
+  populateScheduleStaffFilter(staffOptions);
+}
+
+function populateScheduleStaffFilter(staffOptions) {
+  const select = document.getElementById('task-schedule-staff');
+  if (!select) return;
+  const previous = select.value;
+  const options = ['<option value="all">Tất cả</option>', ...staffOptions.map(u => `<option value="${u.fullName}">${u.fullName}</option>`)];
+  select.innerHTML = options.join('');
+  if (previous && [...select.options].some(opt => opt.value === previous)) {
+    select.value = previous;
+  } else {
+    select.value = 'all';
+  }
+}
+
+function scheduleRemoteSync(options = {}) {
+  if (!isRemoteSyncEnabled()) return;
+  const { immediate = false, reason = 'auto' } = options;
+  if (immediate) {
+    pushRemoteState({ reason }).catch(() => {});
+    return;
+  }
+  clearTimeout(remotePushTimer);
+  remotePushTimer = setTimeout(() => {
+    pushRemoteState({ reason }).catch(() => {});
+  }, REMOTE_PUSH_DEBOUNCE);
+}
+
+function isRemoteSyncEnabled() {
+  const config = state.sync ?? defaultState().sync;
+  return Boolean(config.enabled && config.remoteUrl);
+}
+
+async function pushRemoteState({ reason = 'auto' } = {}) {
+  if (!isRemoteSyncEnabled()) return false;
+  if (remoteSyncInFlight) {
+    pendingRemotePush = true;
+    return false;
+  }
+ codex/fix-issues-in-checklist-page-tahi62
+  const id = selected.dataset.id;
+  const customer = state.customers.find(c => c.id === id);
+  if (!customer) return;
+  showPage('care');
+  if (location.hash !== '#care') {
+    location.hash = 'care';
+  }
+  fillCareForm(customer);
+}
+
+function openCustomerHistory() {
+  const selected = getSelectedRow('customer-table');
+  if (!selected) {
+    showToast('Chọn khách hàng để xem lịch sử', true);
+    return;
+  }
+  openHistoryModal(selected.dataset.id);
+}
+
+function openHistoryModal(id) {
+  const customer = state.customers.find(c => c.id === id);
+  if (!customer) return;
+  const careHistory = state.care.filter(c => c.phone === customer.phone || c.name === customer.name);
+  const statusHistory = careHistory
+    .filter(c => c.rating === 'scheduled')
+    .map(item => `<li>${formatDate(item.date)} - Hẹn: ${formatDate(item.appointmentDate)} ${item.appointmentTime ?? ''}</li>`)
+    .join('');
+  const template = document.getElementById('history-modal-template');
+  const modal = template.content.cloneNode(true);
+  modal.querySelector('[data-customer]').innerHTML = `
+    <p><strong>Tên:</strong> ${customer.name}</p>
+    <p><strong>Số điện thoại:</strong> ${customer.phone}</p>
+    <p><strong>Địa chỉ:</strong> ${customer.address || 'Chưa có'}</p>
+    <p><strong>Nguồn:</strong> ${renderSource(customer)}</p>
+    <p><strong>Trạng thái:</strong> ${renderCustomerStatus(customer)}</p>`;
+  modal.querySelector('[data-care]').innerHTML = careHistory.map(item => `
+    <div class="history-entry">
+      <p><strong>${formatDate(item.date)}</strong> - ${renderCareMethod(item.method)} - ${renderRating(item)}</p>
+      <p>Nội dung: ${item.content}</p>
+      <p>Phản hồi: ${item.feedback || 'Không'}</p>
+      <p>Ghi chú: ${item.notes || 'Không'}</p>
+    </div>`).join('') || '<p>Chưa có lịch sử CSKH</p>';
+  modal.querySelector('[data-status]').innerHTML = statusHistory || '<p>Chưa có lịch hẹn</p>';
+  document.body.appendChild(modal);
+}
+
+function openCareDetails(id) {
+  const item = state.care.find(c => c.id === id);
+  if (!item) return;
+  openInfoModal('Chi tiết CSKH', `
+    <p><strong>Ngày:</strong> ${formatDate(item.date)}</p>
+    <p><strong>Khách hàng:</strong> ${item.name} (${item.phone})</p>
+    <p><strong>Nhân viên:</strong> ${item.staff}</p>
+    <p><strong>Hình thức:</strong> ${renderCareMethod(item.method)}</p>
+    <p><strong>Nội dung:</strong> ${item.content}</p>
+    <p><strong>Phản hồi:</strong> ${item.feedback || 'Không'}</p>
+    <p><strong>Ghi chú:</strong> ${item.notes || 'Không'}</p>
+    <p><strong>Đánh giá:</strong> ${renderRating(item)}</p>
+    ${item.rating === 'lost' ? `<p><strong>Lý do mất khách:</strong> ${item.lostReason || 'Không'}</p>` : ''}
+    ${item.rating === 'scheduled' ? `<p><strong>Ngày hẹn:</strong> ${formatDate(item.appointmentDate)} ${item.appointmentTime ?? ''}</p>` : ''}`);
+}
+
+function selectRow(row) {
+  const tbody = row.closest('tbody');
+  tbody.querySelectorAll('tr').forEach(tr => tr.classList.remove('selected'));
+  row.classList.add('selected');
+}
+
+function getSelectedRow(tableId) {
+  return document.querySelector(`#${tableId} tbody tr.selected`);
+}
+
+function openServiceModal(type, id) {
+  const item = type === 'warranty' ? state.warranties.find(w => w.id === id) : state.maintenances.find(m => m.id === id);
+  if (!item) return;
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content">
+      <header>
+        <h3>Cập nhật ${type === 'warranty' ? 'bảo hành' : 'bảo dưỡng'}</h3>
+        <button class="icon" data-close>&times;</button>
+      </header>
+      <form class="form-grid" id="service-update-form">
+        <label>Trạng thái hỗ trợ
+          <select name="supported">
+            <option value="false" ${!item.supported ? 'selected' : ''}>Chưa hỗ trợ</option>
+            <option value="true" ${item.supported ? 'selected' : ''}>Đã hỗ trợ</option>
+          </select>
+        </label>
+        <label>Ngày gửi linh kiện
+          <input type="date" name="partDate" value="${item.parts?.at(-1)?.date ?? ''}" />
+        </label>
+        <label>Chi tiết linh kiện
+          <input type="text" name="partDetail" value="${item.parts?.at(-1)?.detail ?? ''}" />
+        </label>
+        <label class="full">Ghi chú
+          <textarea name="notes" rows="3">${item.notes ?? ''}</textarea>
+        </label>
+        <div class="form-actions full">
+          <button type="submit" class="primary">Lưu</button>
+          <button type="button" class="ghost" data-close>Đóng</button>
+        </div>
+      </form>
+    </div>`;
+  modal.querySelector('#service-update-form').addEventListener('submit', evt => {
+    evt.preventDefault();
+    const formData = new FormData(evt.target);
+    item.supported = formData.get('supported') === 'true';
+    const partDate = formData.get('partDate');
+    const partDetail = formData.get('partDetail');
+    if (partDate && partDetail) {
+      item.parts = item.parts ?? [];
+      item.parts.push({ date: partDate, detail: partDetail });
+
+  remoteSyncInFlight = true;
+  const config = state.sync;
+  try {
     const payload = prepareStateForTransport();
     const response = await fetch(config.remoteUrl, {
       method: (config.method ?? 'PUT').toUpperCase(),
@@ -1608,6 +2481,7 @@ async function pushRemoteState({ reason = 'auto' } = {}) {
     });
     if (!response.ok) {
       throw new Error(`Máy chủ trả về mã ${response.status}`);
+ main
     }
     const pushedAt = new Date().toISOString();
     state.sync.lastPush = pushedAt;
@@ -1675,7 +2549,88 @@ async function pullRemoteState({ silent = false } = {}) {
   }
 }
 
+ codex/fix-issues-in-checklist-page-tahi62
+function updateHashSilently(value) {
+  if (!value) return;
+  if (typeof history !== 'undefined' && typeof history.replaceState === 'function') {
+    history.replaceState(null, '', `#${value}`);
+  } else if (location.hash !== `#${value}`) {
+    location.hash = value;
+  }
+}
+
+function showPageFromHash({ silent = false } = {}) {
+  if (!currentUser) return false;
+  const hash = location.hash.replace('#', '');
+  if (!hash) return false;
+  return showPage(hash, { silent });
+}
+
+window.addEventListener('hashchange', () => {
+  if (!currentUser) return;
+  if (!showPageFromHash()) {
+    const fallback = getInitialPage({ preferHash: false });
+    if (fallback) {
+      showPage(fallback, { silent: true });
+      updateHashSilently(fallback);
+    }
+  }
+});
+
+function formatDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('vi-VN');
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  return date.toLocaleString('vi-VN');
+}
+
+function shadeColor(color, percent) {
+  if (!color) return '#0d7474';
+  const num = parseInt(color.replace('#', ''), 16);
+  const amt = Math.round(2.55 * percent);
+  const r = (num >> 16) + amt;
+  const g = (num >> 8 & 0x00ff) + amt;
+  const b = (num & 0x0000ff) + amt;
+  return `#${(
+    0x1000000 +
+    (r < 255 ? (r < 1 ? 0 : r) : 255) * 0x10000 +
+    (g < 255 ? (g < 1 ? 0 : g) : 255) * 0x100 +
+    (b < 255 ? (b < 1 ? 0 : b) : 255)
+  ).toString(16).slice(1)}`;
+}
+
+showPageFromHash();
+
+// Toast styles
+const style = document.createElement('style');
+style.textContent = `
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 0.9rem 1.5rem;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 600;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 4000;
+  box-shadow: 0 12px 32px -16px rgba(0,0,0,0.3);
+}
+.toast.success { background: var(--primary); }
+.toast.error { background: var(--danger); }
+.toast.visible { opacity: 1; transform: translateY(0); }
+`;
+document.head.appendChild(style);
+
 function startRemotePolling() {
   clearInterval(remotePullTimer);
   if (!isRemoteSyncEnabled()) return;
   const interval = Math.max(1, Number(state.sync?.autoPull
+ main
