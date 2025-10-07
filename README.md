@@ -40,6 +40,9 @@ Giao diện web nội bộ dành cho doanh nghiệp KLC Bến Lức. Toàn bộ 
 5. **Truy cập nhanh CheckList**
    - Sử dụng đường dẫn `checklist.html` để vào thẳng module CheckList công việc (vẫn yêu cầu đăng nhập theo phân quyền).
 
+5. **Truy cập nhanh CheckList**
+   - Sử dụng đường dẫn `checklist.html` để vào thẳng module CheckList công việc (vẫn yêu cầu đăng nhập theo phân quyền).
+
 ## Cấu trúc thư mục
 
 ```
