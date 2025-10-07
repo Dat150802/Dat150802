@@ -44,8 +44,8 @@ init();
 
 function init() {
   applyBranding();
+  setupSyncListeners(); // đảm bảo lắng nghe thay đổi từ localStorage
   attachEventListeners();
-  setupSyncListeners();
   const sourceSelect = document.getElementById('customer-source');
   if (sourceSelect) {
     toggleSourceDetail.call(sourceSelect);
