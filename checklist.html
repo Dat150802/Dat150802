@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KLC Bến Lức - Hệ thống quản trị nội bộ</title>
+  <title>CheckList công việc - KLC Bến Lức</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -11,7 +11,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
   <script type="module" src="app.js" defer></script>
 </head>
-<body>
+<body data-default-page="checklist" data-single-page="checklist">
   <div id="loader" class="loader hidden">
     <div class="spinner"></div>
     <p id="loader-message">Đang xử lý...</p>
@@ -27,11 +27,11 @@
         </div>
       </div>
       <nav>
-        <button class="nav-link active" data-target="dashboard">Trang chủ</button>
+        <button class="nav-link" data-target="dashboard">Trang chủ</button>
         <button class="nav-link" data-target="customers">Khách hàng</button>
         <button class="nav-link" data-target="care">CSKH</button>
         <button class="nav-link" data-target="service">Bảo hành &amp; Bảo dưỡng</button>
-        <button class="nav-link" data-target="checklist">CheckList công việc</button>
+        <button class="nav-link active" data-target="checklist">CheckList công việc</button>
         <button class="nav-link" data-target="inventory">Tồn kho</button>
         <button class="nav-link" data-target="finance">Thu &amp; Chi</button>
         <button class="nav-link" data-target="settings">Tùy chỉnh</button>
@@ -66,7 +66,7 @@
         </div>
       </section>
 
-      <section id="dashboard" class="page active">
+      <section id="dashboard" class="page">
         <header class="page-header">
           <h2>Trang chủ</h2>
           <p>Thống kê tổng quan các hoạt động</p>
