@@ -1,6 +1,14 @@
 const STORAGE_KEY = 'klc-ben-luc-data-v1';
 const REMEMBER_KEY = 'klc-ben-luc-remember';
 const SESSION_KEY = 'klc-ben-luc-session';
+const CLIENT_ID = crypto.randomUUID();
+const REMOTE_PUSH_DEBOUNCE = 1200;
+
+let remotePushTimer = null;
+let remotePullTimer = null;
+let remoteSyncInFlight = false;
+let pendingRemotePush = false;
+let broadcastChannel = null;
 
 const defaultState = () => ({
   siteName: 'KLC Bến Lức',
@@ -20,7 +28,17 @@ const defaultState = () => ({
   },
   inventory: [],
   finance: [],
-  approvals: []
+  approvals: [],
+  sync: {
+    enabled: false,
+    remoteUrl: '',
+    apiKey: '',
+    method: 'PUT',
+    autoPullMinutes: 5,
+    lastPush: null,
+    lastPull: null,
+    lastError: null
+  }
 });
 
 let state = loadState();
@@ -44,8 +62,11 @@ init();
 
 function init() {
   applyBranding();
-  setupSyncListeners(); // đảm bảo lắng nghe thay đổi từ localStorage
+  renderSyncStatus();
+  updateSyncForm();
   attachEventListeners();
+  setupSyncListeners(); // lắng nghe thay đổi localStorage & BroadcastChannel
+
   const sourceSelect = document.getElementById('customer-source');
   if (sourceSelect) {
     toggleSourceDetail.call(sourceSelect);
@@ -63,8 +84,15 @@ function loadState() {
   return parseStoredState(raw);
 }
 
-function saveState() {
+function saveState(options = {}) {
+  const { skipRemote = false, skipBroadcast = false } = options;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!skipBroadcast) {
+    broadcastState(skipRemote ? 'meta-update' : 'local-change');
+  }
+  if (!skipRemote) {
+    scheduleRemoteSync();
+  }
 }
 
 function parseStoredState(raw) {
@@ -79,15 +107,19 @@ function parseStoredState(raw) {
 }
 
 function handleExternalStateUpdate(raw) {
-  const nextState = parseStoredState(raw);
-  const currentSnapshot = JSON.stringify(state);
-  const incomingSnapshot = JSON.stringify(nextState);
-  if (currentSnapshot === incomingSnapshot) return;
-  state = nextState;
+  const nextState = raw ? parseStoredState(raw) : defaultState();
+  if (stateFingerprint(nextState) === stateFingerprint(state)) return;
+  state = normalizeIncomingState(nextState);
   applyBranding();
+  renderSyncStatus();
+  updateSyncForm();
   if (currentUser) {
     refreshAll();
     showToast('Dữ liệu đã được đồng bộ từ tài khoản khác');
+  }
+  startRemotePolling();
+  if (isRemoteSyncEnabled()) {
+    pullRemoteState({ silent: true });
   }
 }
 
@@ -98,6 +130,17 @@ function setupSyncListeners() {
       handleExternalStateUpdate(evt.newValue);
     }
   });
+
+  if ('BroadcastChannel' in window) {
+    broadcastChannel?.close?.();
+    broadcastChannel = new BroadcastChannel('klc-ben-luc-sync');
+    broadcastChannel.addEventListener('message', evt => {
+      if (!evt?.data || evt.data.source === CLIENT_ID) return;
+      if (evt.data.type === 'state-update') {
+        handleExternalStateUpdate(JSON.stringify(evt.data.payload));
+      }
+    });
+  }
 }
 
 function loadSession() {
@@ -107,6 +150,20 @@ function loadSession() {
     return JSON.parse(raw);
   } catch (error) {
     return null;
+  }
+}
+
+function broadcastState(reason = 'update') {
+  if (!broadcastChannel) return;
+  try {
+    broadcastChannel.postMessage({
+      type: 'state-update',
+      payload: state,
+      reason,
+      source: CLIENT_ID
+    });
+  } catch (error) {
+    console.warn('Không thể phát thông báo đồng bộ nội bộ', error);
   }
 }
 
@@ -219,6 +276,16 @@ function attachEventListeners() {
     document.getElementById('toggle-layout-edit')?.addEventListener('click', toggleLayoutEdit);
   }
 
+  const syncForm = document.getElementById('sync-config-form');
+  if (syncForm) {
+    syncForm.addEventListener('submit', handleSyncConfigSubmit);
+    syncForm.querySelector('[name="enabled"]')?.addEventListener('change', handleSyncToggle);
+    document.getElementById('sync-test')?.addEventListener('click', handleSyncTest);
+    document.querySelectorAll('[data-sync-action]')
+      .forEach(btn => btn.addEventListener('click', handleSyncAction));
+    document.getElementById('sync-import-input')?.addEventListener('change', handleImportFile);
+  }
+
   document.addEventListener('click', evt => {
     if (evt.target.matches('[data-close]')) {
       const modal = evt.target.closest('.modal');
@@ -252,6 +319,7 @@ function bootApp() {
       updateHashSilently(initialPage);
     }
   }
+  startRemotePolling();
 }
 
 function showLogin() {
@@ -260,6 +328,7 @@ function showLogin() {
   elements.pages.forEach(page => page.classList.remove('active'));
   elements.navLinks.forEach(link => link.classList.remove('active'));
   document.getElementById('login-username')?.focus();
+  stopRemotePolling();
 }
 
 function filterNavByRole() {
@@ -1274,11 +1343,13 @@ function applyBranding() {
   document.title = `${state.siteName} - Hệ thống quản trị nội bộ`;
   document.querySelectorAll('.brand h1').forEach(el => el.textContent = state.siteName);
   if (state.logo) {
-    elements.brandLogo.src = state.logo;
-    document.querySelector('.login-logo').src = state.logo;
+    if (elements.brandLogo) elements.brandLogo.src = state.logo;
+    const loginLogo = document.querySelector('.login-logo');
+    if (loginLogo) loginLogo.src = state.logo;
   } else {
-    elements.brandLogo.src = 'assets/logo.svg';
-    document.querySelector('.login-logo').src = 'assets/logo.svg';
+    if (elements.brandLogo) elements.brandLogo.src = 'assets/logo.svg';
+    const loginLogo = document.querySelector('.login-logo');
+    if (loginLogo) loginLogo.src = 'assets/logo.svg';
   }
 }
 
@@ -1437,429 +1508,174 @@ function renderCollectionName(collection) {
   }[collection] ?? collection;
 }
 
-function toggleLayoutEdit() {
-  if (currentUser.role !== 'admin') {
-    showToast('Chỉ quản trị viên mới chỉnh sửa bố cục', true);
+/* ====== SYNC UI & LOGIC ====== */
+function renderSyncStatus() {
+  const wrapper = document.getElementById('sync-status');
+  const badge = document.getElementById('sync-status-badge');
+  if (!wrapper) return;
+  const config = state.sync ?? defaultState().sync;
+  const enabled = Boolean(config.enabled && config.remoteUrl);
+  const statusDot = `<span class="status-dot ${enabled ? 'online' : 'offline'}"></span>`;
+  const lines = [
+    `<p><strong>Trạng thái:</strong> ${statusDot}${enabled ? 'Đã bật đồng bộ' : 'Đang tắt đồng bộ'}</p>`,
+    `<p><strong>Máy chủ:</strong> ${config.remoteUrl ? `<span class="mono">${config.remoteUrl}</span>` : 'Chưa cấu hình'}</p>`,
+    `<p><strong>Lần gửi:</strong> ${config.lastPush ? formatDateTime(config.lastPush) : 'Chưa có'}</p>`,
+    `<p><strong>Lần tải:</strong> ${config.lastPull ? formatDateTime(config.lastPull) : 'Chưa có'}</p>`
+  ];
+  if (config.lastError) {
+    lines.push(`<p class="error"><strong>Lỗi gần nhất:</strong> ${config.lastError}</p>`);
+  }
+  wrapper.innerHTML = lines.join('');
+  if (badge) {
+    badge.textContent = enabled ? 'Đã bật' : 'Đang tắt';
+    badge.classList.toggle('online', enabled);
+    badge.classList.toggle('offline', !enabled);
+  }
+}
+
+function updateSyncForm() {
+  const form = document.getElementById('sync-config-form');
+  if (!form) return;
+  const config = state.sync ?? defaultState().sync;
+  const enabledInput = form.querySelector('[name="enabled"]');
+  const urlInput = form.querySelector('[name="remoteUrl"]');
+  const keyInput = form.querySelector('[name="apiKey"]');
+  const methodSelect = form.querySelector('[name="method"]');
+  const intervalInput = form.querySelector('[name="interval"]');
+  const enabled = Boolean(config.enabled);
+  if (enabledInput) enabledInput.checked = enabled;
+  if (urlInput) {
+    urlInput.value = config.remoteUrl ?? '';
+    urlInput.disabled = !enabled;
+  }
+  if (keyInput) {
+    keyInput.value = config.apiKey ?? '';
+    keyInput.disabled = !enabled;
+  }
+  if (methodSelect) {
+    methodSelect.value = (config.method ?? 'PUT').toUpperCase();
+    methodSelect.disabled = !enabled;
+  }
+  if (intervalInput) {
+    intervalInput.value = config.autoPullMinutes ?? 5;
+    intervalInput.disabled = !enabled;
+  }
+  const testButton = document.getElementById('sync-test');
+  if (testButton) testButton.disabled = !enabled;
+  document.querySelectorAll('[data-sync-action]').forEach(button => {
+    const action = button.dataset.syncAction;
+    const requiresRemote = !['export', 'import'].includes(action);
+    button.disabled = requiresRemote ? !enabled : false;
+  });
+}
+
+function scheduleRemoteSync(options = {}) {
+  if (!isRemoteSyncEnabled()) return;
+  const { immediate = false, reason = 'auto' } = options;
+  if (immediate) {
+    pushRemoteState({ reason }).catch(() => {});
     return;
   }
-  const enabled = !elements.dashboardWidgets.classList.toggle('editable');
-  const button = document.getElementById('toggle-layout-edit');
-  if (elements.dashboardWidgets.classList.contains('editable')) {
-    button.textContent = 'Tắt chế độ chỉnh sửa';
-    enableDragAndDrop();
-  } else {
-    button.textContent = 'Bật chế độ chỉnh sửa';
-    disableDragAndDrop();
+  clearTimeout(remotePushTimer);
+  remotePushTimer = setTimeout(() => {
+    pushRemoteState({ reason }).catch(() => {});
+  }, REMOTE_PUSH_DEBOUNCE);
+}
+
+function isRemoteSyncEnabled() {
+  const config = state.sync ?? defaultState().sync;
+  return Boolean(config.enabled && config.remoteUrl);
+}
+
+async function pushRemoteState({ reason = 'auto' } = {}) {
+  if (!isRemoteSyncEnabled()) return false;
+  if (remoteSyncInFlight) {
+    pendingRemotePush = true;
+    return false;
   }
-}
-
-function enableDragAndDrop() {
-  elements.dashboardWidgets.querySelectorAll('.widget').forEach(widget => {
-    widget.setAttribute('draggable', 'true');
-    widget.addEventListener('dragstart', onDragStart);
-    widget.addEventListener('dragover', onDragOver);
-    widget.addEventListener('drop', onDrop);
-  });
-}
-
-function disableDragAndDrop() {
-  elements.dashboardWidgets.querySelectorAll('.widget').forEach(widget => {
-    widget.removeAttribute('draggable');
-    widget.removeEventListener('dragstart', onDragStart);
-    widget.removeEventListener('dragover', onDragOver);
-    widget.removeEventListener('drop', onDrop);
-  });
-}
-
-let draggedWidget = null;
-function onDragStart(evt) {
-  draggedWidget = evt.currentTarget;
-}
-function onDragOver(evt) {
-  evt.preventDefault();
-}
-function onDrop(evt) {
-  evt.preventDefault();
-  if (!draggedWidget) return;
-  const target = evt.currentTarget;
-  if (draggedWidget === target) return;
-  const widgets = [...elements.dashboardWidgets.children];
-  const draggedIndex = widgets.indexOf(draggedWidget);
-  const targetIndex = widgets.indexOf(target);
-  if (draggedIndex < targetIndex) {
-    target.after(draggedWidget);
-  } else {
-    target.before(draggedWidget);
-  }
-  draggedWidget = null;
-}
-
-function refreshAll() {
-  renderCustomers();
-  renderCare();
-  renderWarranties();
-  renderMaintenances();
-  renderTaskTemplates();
-  renderTaskSchedule();
-  renderTaskReports();
-  renderInventory();
-  renderFinance();
-  renderStaff();
-  renderApprovals();
-  populateCustomerHints();
-  populateStaffSelectors();
-  populateShiftSelectors();
-  populateTaskReportTemplates();
-  updateDashboard();
-}
-
-function populateCustomerHints() {
-  const nameList = document.getElementById('customer-names');
-  const phoneList = document.getElementById('customer-phones');
-  const optionsName = state.customers.map(c => `<option value="${c.name}"></option>`).join('');
-  const optionsPhone = state.customers.map(c => `<option value="${c.phone}"></option>`).join('');
-  nameList.innerHTML = optionsName;
-  phoneList.innerHTML = optionsPhone;
-}
-
-function populateStaffSelectors() {
-  const staffOptions = state.users.filter(u => u.role !== 'admin' || currentUser.role === 'admin');
-  const optionHtml = staffOptions.map(u => `<option value="${u.fullName}">${u.fullName}</option>`).join('');
-  ['care-staff', 'task-template-staff', 'task-report-staff'].forEach(id => {
-    const select = document.getElementById(id);
-    if (select) select.innerHTML = optionHtml;
-  });
-  populateScheduleStaffFilter(staffOptions);
-}
-
-function populateScheduleStaffFilter(staffOptions) {
-  const select = document.getElementById('task-schedule-staff');
-  if (!select) return;
-  const previous = select.value;
-  const options = ['<option value="all">Tất cả</option>', ...staffOptions.map(u => `<option value="${u.fullName}">${u.fullName}</option>`)];
-  select.innerHTML = options.join('');
-  if (previous && [...select.options].some(opt => opt.value === previous)) {
-    select.value = previous;
-  } else {
-    select.value = 'all';
-  }
-}
-
-function populateShiftSelectors() {
-  const templateShift = document.getElementById('task-template-shift');
-  const reportShift = document.getElementById('task-report-shift');
-  if (reportShift && templateShift) {
-    reportShift.innerHTML = templateShift.innerHTML;
-  }
-}
-
-function fillCareForm(customer) {
-  const form = document.getElementById('care-form');
-  form.name.value = customer.name ?? '';
-  form.phone.value = customer.phone ?? '';
-  form.address.value = customer.address ?? '';
-}
-
-function openCareFromCustomer() {
-  const selected = getSelectedRow('customer-table');
-  if (!selected) {
-    showToast('Vui lòng chọn khách hàng từ danh sách', true);
-    return;
-  }
-  const id = selected.dataset.id;
-  const customer = state.customers.find(c => c.id === id);
-  if (!customer) return;
-  showPage('care');
-  if (location.hash !== '#care') {
-    location.hash = 'care';
-  }
-  fillCareForm(customer);
-}
-
-function openCustomerHistory() {
-  const selected = getSelectedRow('customer-table');
-  if (!selected) {
-    showToast('Chọn khách hàng để xem lịch sử', true);
-    return;
-  }
-  openHistoryModal(selected.dataset.id);
-}
-
-function openHistoryModal(id) {
-  const customer = state.customers.find(c => c.id === id);
-  if (!customer) return;
-  const careHistory = state.care.filter(c => c.phone === customer.phone || c.name === customer.name);
-  const statusHistory = careHistory
-    .filter(c => c.rating === 'scheduled')
-    .map(item => `<li>${formatDate(item.date)} - Hẹn: ${formatDate(item.appointmentDate)} ${item.appointmentTime ?? ''}</li>`)
-    .join('');
-  const template = document.getElementById('history-modal-template');
-  const modal = template.content.cloneNode(true);
-  modal.querySelector('[data-customer]').innerHTML = `
-    <p><strong>Tên:</strong> ${customer.name}</p>
-    <p><strong>Số điện thoại:</strong> ${customer.phone}</p>
-    <p><strong>Địa chỉ:</strong> ${customer.address || 'Chưa có'}</p>
-    <p><strong>Nguồn:</strong> ${renderSource(customer)}</p>
-    <p><strong>Trạng thái:</strong> ${renderCustomerStatus(customer)}</p>`;
-  modal.querySelector('[data-care]').innerHTML = careHistory.map(item => `
-    <div class="history-entry">
-      <p><strong>${formatDate(item.date)}</strong> - ${renderCareMethod(item.method)} - ${renderRating(item)}</p>
-      <p>Nội dung: ${item.content}</p>
-      <p>Phản hồi: ${item.feedback || 'Không'}</p>
-      <p>Ghi chú: ${item.notes || 'Không'}</p>
-    </div>`).join('') || '<p>Chưa có lịch sử CSKH</p>';
-  modal.querySelector('[data-status]').innerHTML = statusHistory || '<p>Chưa có lịch hẹn</p>';
-  document.body.appendChild(modal);
-}
-
-function openCareDetails(id) {
-  const item = state.care.find(c => c.id === id);
-  if (!item) return;
-  openInfoModal('Chi tiết CSKH', `
-    <p><strong>Ngày:</strong> ${formatDate(item.date)}</p>
-    <p><strong>Khách hàng:</strong> ${item.name} (${item.phone})</p>
-    <p><strong>Nhân viên:</strong> ${item.staff}</p>
-    <p><strong>Hình thức:</strong> ${renderCareMethod(item.method)}</p>
-    <p><strong>Nội dung:</strong> ${item.content}</p>
-    <p><strong>Phản hồi:</strong> ${item.feedback || 'Không'}</p>
-    <p><strong>Ghi chú:</strong> ${item.notes || 'Không'}</p>
-    <p><strong>Đánh giá:</strong> ${renderRating(item)}</p>
-    ${item.rating === 'lost' ? `<p><strong>Lý do mất khách:</strong> ${item.lostReason || 'Không'}</p>` : ''}
-    ${item.rating === 'scheduled' ? `<p><strong>Ngày hẹn:</strong> ${formatDate(item.appointmentDate)} ${item.appointmentTime ?? ''}</p>` : ''}`);
-}
-
-function selectRow(row) {
-  const tbody = row.closest('tbody');
-  tbody.querySelectorAll('tr').forEach(tr => tr.classList.remove('selected'));
-  row.classList.add('selected');
-}
-
-function getSelectedRow(tableId) {
-  return document.querySelector(`#${tableId} tbody tr.selected`);
-}
-
-function openServiceModal(type, id) {
-  const item = type === 'warranty' ? state.warranties.find(w => w.id === id) : state.maintenances.find(m => m.id === id);
-  if (!item) return;
-  const modal = document.createElement('div');
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <header>
-        <h3>Cập nhật ${type === 'warranty' ? 'bảo hành' : 'bảo dưỡng'}</h3>
-        <button class="icon" data-close>&times;</button>
-      </header>
-      <form class="form-grid" id="service-update-form">
-        <label>Trạng thái hỗ trợ
-          <select name="supported">
-            <option value="false" ${!item.supported ? 'selected' : ''}>Chưa hỗ trợ</option>
-            <option value="true" ${item.supported ? 'selected' : ''}>Đã hỗ trợ</option>
-          </select>
-        </label>
-        <label>Ngày gửi linh kiện
-          <input type="date" name="partDate" value="${item.parts?.at(-1)?.date ?? ''}" />
-        </label>
-        <label>Chi tiết linh kiện
-          <input type="text" name="partDetail" value="${item.parts?.at(-1)?.detail ?? ''}" />
-        </label>
-        <label class="full">Ghi chú
-          <textarea name="notes" rows="3">${item.notes ?? ''}</textarea>
-        </label>
-        <div class="form-actions full">
-          <button type="submit" class="primary">Lưu</button>
-          <button type="button" class="ghost" data-close>Đóng</button>
-        </div>
-      </form>
-    </div>`;
-  modal.querySelector('#service-update-form').addEventListener('submit', evt => {
-    evt.preventDefault();
-    const formData = new FormData(evt.target);
-    item.supported = formData.get('supported') === 'true';
-    const partDate = formData.get('partDate');
-    const partDetail = formData.get('partDetail');
-    if (partDate && partDetail) {
-      item.parts = item.parts ?? [];
-      item.parts.push({ date: partDate, detail: partDetail });
+  remoteSyncInFlight = true;
+  const config = state.sync;
+  try {
+    const payload = prepareStateForTransport();
+    const response = await fetch(config.remoteUrl, {
+      method: (config.method ?? 'PUT').toUpperCase(),
+      headers: buildSyncHeaders({ includeJson: true }),
+      body: JSON.stringify({
+        reason,
+        updatedAt: new Date().toISOString(),
+        data: payload
+      })
+    });
+    if (!response.ok) {
+      throw new Error(`Máy chủ trả về mã ${response.status}`);
     }
-    item.notes = formData.get('notes');
-    saveState();
-    renderWarranties();
-    renderMaintenances();
-    modal.remove();
-    showToast('Đã cập nhật trạng thái');
-  });
-  document.body.appendChild(modal);
-}
-
-function openInfoModal(title, body) {
-  const modal = document.createElement('div');
-  modal.className = 'modal';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <header>
-        <h3>${title}</h3>
-        <button class="icon" data-close>&times;</button>
-      </header>
-      <div>${body}</div>
-    </div>`;
-  document.body.appendChild(modal);
-}
-
-function updateDashboard() {
-  document.getElementById('total-customers').textContent = state.customers.length;
-  document.getElementById('total-care').textContent = state.care.length;
-  document.getElementById('total-service').textContent = state.warranties.length + state.maintenances.length;
-  const income = state.finance.filter(i => i.type === 'income').reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  const expense = state.finance.filter(i => i.type === 'expense').reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  document.getElementById('finance-balance').textContent = `${(income - expense).toLocaleString('vi-VN')} đ`;
-  drawCharts();
-}
-
-function drawCharts() {
-  drawLineChart('customer-growth', aggregateByMonth(state.customers, 'date'), 'Khách hàng mới');
-  drawLineChart('care-chart', aggregateByMonth(state.care, 'date'), 'CSKH');
-  drawLineChart('service-chart', aggregateByMonth([...state.warranties, ...state.maintenances], 'date'), 'Bảo hành/Bảo dưỡng');
-  drawFinanceChart();
-}
-
-function aggregateByMonth(list, field) {
-  const map = new Map();
-  list.forEach(item => {
-    const date = item[field] || item.createdAt;
-    if (!date) return;
-    const d = new Date(date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    map.set(key, (map.get(key) || 0) + 1);
-  });
-  return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-}
-
-function drawLineChart(canvasId, data, label) {
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  if (charts[canvasId]) charts[canvasId].destroy();
-  charts[canvasId] = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: data.map(([key]) => key),
-      datasets: [{
-        label,
-        data: data.map(([, value]) => value),
-        borderColor: getComputedStyle(document.documentElement).getPropertyValue('--primary'),
-        tension: 0.35,
-        fill: false
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } }
-    }
-  });
-}
-
-function drawFinanceChart() {
-  const canvasId = 'finance-chart';
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  if (charts[canvasId]) charts[canvasId].destroy();
-  const income = state.finance.filter(i => i.type === 'income').reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  const expense = state.finance.filter(i => i.type === 'expense').reduce((sum, i) => sum + Number(i.amount || 0), 0);
-  charts[canvasId] = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: ['Thu', 'Chi'],
-      datasets: [{
-        data: [income, expense],
-        backgroundColor: [
-          shadeColor(state.primaryColor, -10),
-          '#f39c12'
-        ]
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom' } }
-    }
-  });
-}
-
-function updateHashSilently(value) {
-  if (!value) return;
-  if (typeof history !== 'undefined' && typeof history.replaceState === 'function') {
-    history.replaceState(null, '', `#${value}`);
-  } else if (location.hash !== `#${value}`) {
-    location.hash = value;
-  }
-}
-
-function showPageFromHash({ silent = false } = {}) {
-  if (!currentUser) return false;
-  const hash = location.hash.replace('#', '');
-  if (!hash) return false;
-  return showPage(hash, { silent });
-}
-
-window.addEventListener('hashchange', () => {
-  if (!currentUser) return;
-  if (!showPageFromHash()) {
-    const fallback = getInitialPage({ preferHash: false });
-    if (fallback) {
-      showPage(fallback, { silent: true });
-      updateHashSilently(fallback);
+    const pushedAt = new Date().toISOString();
+    state.sync.lastPush = pushedAt;
+    state.sync.lastError = null;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    return true;
+  } catch (error) {
+    state.sync.lastError = error.message;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    console.error('Đẩy dữ liệu lên máy chủ thất bại', error);
+    return false;
+  } finally {
+    remoteSyncInFlight = false;
+    if (pendingRemotePush) {
+      pendingRemotePush = false;
+      scheduleRemoteSync({ immediate: true, reason: 'retry' });
     }
   }
-});
-
-function formatDate(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString('vi-VN');
 }
 
-function formatDateTime(value) {
-  const date = new Date(value);
-  return date.toLocaleString('vi-VN');
+async function pullRemoteState({ silent = false } = {}) {
+  if (!isRemoteSyncEnabled()) return false;
+  const config = state.sync;
+  try {
+    const response = await fetch(config.remoteUrl, {
+      method: 'GET',
+      headers: buildSyncHeaders(),
+      cache: 'no-store'
+    });
+    if (!response.ok) {
+      throw new Error(`Máy chủ trả về mã ${response.status}`);
+    }
+    const payload = await response.json();
+    const remoteState = payload?.data ?? payload?.state ?? payload;
+    if (!remoteState || typeof remoteState !== 'object') {
+      throw new Error('Dữ liệu phản hồi không hợp lệ');
+    }
+    const normalizedRemote = normalizeIncomingState(remoteState);
+    const hasChanged = stateFingerprint(normalizedRemote) !== stateFingerprint(state);
+    state = normalizedRemote;
+    state.sync.lastPull = new Date().toISOString();
+    state.sync.lastError = null;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    applyBranding();
+    if (currentUser) {
+      refreshAll();
+      if (!silent && hasChanged) {
+        showToast('Đã cập nhật dữ liệu từ máy chủ');
+      }
+    }
+    startRemotePolling();
+    return hasChanged;
+  } catch (error) {
+    state.sync.lastError = error.message;
+    saveState({ skipRemote: true });
+    renderSyncStatus();
+    if (!silent) {
+      showToast('Không thể tải dữ liệu từ máy chủ đồng bộ', true);
+    }
+    console.error('Không thể lấy dữ liệu từ máy chủ đồng bộ', error);
+    return false;
+  }
 }
 
-function shadeColor(color, percent) {
-  if (!color) return '#0d7474';
-  const num = parseInt(color.replace('#', ''), 16);
-  const amt = Math.round(2.55 * percent);
-  const r = (num >> 16) + amt;
-  const g = (num >> 8 & 0x00ff) + amt;
-  const b = (num & 0x0000ff) + amt;
-  return `#${(
-    0x1000000 +
-    (r < 255 ? (r < 1 ? 0 : r) : 255) * 0x10000 +
-    (g < 255 ? (g < 1 ? 0 : g) : 255) * 0x100 +
-    (b < 255 ? (b < 1 ? 0 : b) : 255)
-  ).toString(16).slice(1)}`;
-}
-
-showPageFromHash();
-
-// Toast styles
-const style = document.createElement('style');
-style.textContent = `
-.toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  padding: 0.9rem 1.5rem;
-  border-radius: 999px;
-  color: #fff;
-  font-weight: 600;
-  opacity: 0;
-  transform: translateY(10px);
-  transition: opacity 0.3s, transform 0.3s;
-  z-index: 4000;
-  box-shadow: 0 12px 32px -16px rgba(0,0,0,0.3);
-}
-.toast.success { background: var(--primary); }
-.toast.error { background: var(--danger); }
-.toast.visible { opacity: 1; transform: translateY(0); }
-`;
-document.head.appendChild(style);
+function startRemotePolling() {
+  clearInterval(remotePullTimer);
+  if (!isRemoteSyncEnabled()) return;
+  const interval = Math.max(1, Number(state.sync?.autoPull
