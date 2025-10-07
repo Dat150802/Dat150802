@@ -44,6 +44,7 @@ init();
 
 function init() {
   applyBranding();
+  setupSyncListeners(); // đảm bảo lắng nghe thay đổi từ localStorage
   attachEventListeners();
   const sourceSelect = document.getElementById('customer-source');
   if (sourceSelect) {
@@ -58,18 +59,45 @@ function init() {
 }
 
 function loadState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  return parseStoredState(raw);
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function parseStoredState(raw) {
+  if (!raw) return defaultState();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultState();
-    return { ...defaultState(), ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    return { ...defaultState(), ...parsed };
   } catch (error) {
     console.error('Không thể tải dữ liệu, khởi tạo mặc định', error);
     return defaultState();
   }
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function handleExternalStateUpdate(raw) {
+  const nextState = parseStoredState(raw);
+  const currentSnapshot = JSON.stringify(state);
+  const incomingSnapshot = JSON.stringify(nextState);
+  if (currentSnapshot === incomingSnapshot) return;
+  state = nextState;
+  applyBranding();
+  if (currentUser) {
+    refreshAll();
+    showToast('Dữ liệu đã được đồng bộ từ tài khoản khác');
+  }
+}
+
+function setupSyncListeners() {
+  window.addEventListener('storage', evt => {
+    if (evt.storageArea !== localStorage) return;
+    if (evt.key === STORAGE_KEY || evt.key === null) {
+      handleExternalStateUpdate(evt.newValue);
+    }
+  });
 }
 
 function loadSession() {
