@@ -452,12 +452,18 @@ function handleLogin(evt) {
       saveState();
       user = state.users.find(u => u.username === username && u.password === password);
     } else if (fallback && existing) {
-      existing.password = fallback.password;
-      existing.role = existing.role || fallback.role;
-      existing.fullName = existing.fullName || fallback.fullName;
-      existing.updatedAt = new Date().toISOString();
-      saveState();
-      user = state.users.find(u => u.username === username && u.password === password);
+      const updates = {};
+      if (!existing.role && fallback.role) {
+        updates.role = fallback.role;
+      }
+      if (!existing.fullName && fallback.fullName) {
+        updates.fullName = fallback.fullName;
+      }
+      const hasUpdates = Object.keys(updates).length > 0;
+      if (hasUpdates) {
+        Object.assign(existing, updates, { updatedAt: new Date().toISOString() });
+        saveState();
+      }
     }
   }
   withLoading('Đang kiểm tra tài khoản...', () => {
