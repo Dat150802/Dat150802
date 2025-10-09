@@ -13,12 +13,24 @@ import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } 
 import { applyPageModules, watchPageModules } from './core/modules.js';
 
 const user = initApp('checklist');
+codex/fix-errors-and-complete-code
 applyPageModules('checklist');
 watchPageModules('checklist');
 let checklists = readCollection('checklists');
 let staffList = getStaff();
 const COLLECTION = 'checklists';
 
+
+ codex/fix-errors-and-complete-code-sy3thi
+applyPageModules('checklist');
+watchPageModules('checklist');
+
+ codex/build-internal-website-for-klc-ben-luc-b5jncf
+let checklists = readCollection('checklists');
+let staffList = getStaff();
+const COLLECTION = 'checklists';
+
+codex/build-internal-website-for-klc-ben-luc-b5jncf
 const form = document.getElementById('checklist-form');
 const staffHint = document.getElementById('checklist-staff-view');
 const shiftSelect = document.getElementById('checklist-shift');

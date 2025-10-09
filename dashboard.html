@@ -3,26 +3,676 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KLC Bến Lức – Trang tổng quan</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>KLC Bến Lức – Trung tâm điều hành</title>
   <link rel="stylesheet" href="assets/css/brand.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
-</head>
-<body class="bg-slate-100">
-  <div id="app-loading" class="flex"></div>
-  <div id="toast-stack" class="fixed top-6 right-6 flex flex-col items-end"></div>
+  <style>
+    :root {
+      --primary: #f6c90e;
+      --accent: #0f52ba;
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --text: #1f2937;
+      --muted: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--surface-alt);
+      color: var(--text);
+    }
+    a { color: inherit; text-decoration: none; }
+    .app-shell { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 280px;
+      background: linear-gradient(180deg, var(--accent), #0b2f6d);
+      color: #fff;
+      padding: 28px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .brand img {
+      background: rgba(255,255,255,0.15);
+      border-radius: 16px;
+      padding: 10px;
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+    .sidebar nav {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .sidebar nav a {
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: rgba(255,255,255,0.82);
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .sidebar nav a:hover { background: rgba(255,255,255,0.12); transform: translateX(3px); }
+    .sidebar nav a.active { background: rgba(255,255,255,0.25); color: #fff; }
+    .main {
+      flex: 1;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .topbar h2 {
+      margin: 0;
+      font-size: 1.65rem;
+    }
+    .topbar-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(15, 82, 186, 0.12);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .button {
+      border: none;
+      border-radius: 12px;
+      padding: 10px 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      background: var(--accent);
+      color: #fff;
+    }
+    .button.secondary {
+      background: #e5e7eb;
+      color: var(--text);
+    }
+    .button:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(15, 82, 186, 0.18); }
+    .button.secondary:hover { box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12); }
 
-  <div class="app-shell md:flex">
-    <aside id="app-sidebar" class="app-sidebar"></aside>
-    <div class="flex-1 min-h-screen flex flex-col">
-      <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
-      <main id="page-content" class="flex-1 p-4 md:p-6 space-y-6"></main>
-    </div>
+    .sections { display: flex; flex-direction: column; gap: 24px; }
+    section { background: var(--surface); border-radius: 20px; padding: 24px; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08); }
+    section[hidden] { display: none; }
+    section h3 { margin-top: 0; font-size: 1.35rem; }
+    section p.lead { margin-top: 4px; color: var(--muted); }
+
+    .summary-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .summary-card {
+      padding: 20px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(15,82,186,0.1), rgba(15,82,186,0.03));
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .summary-card span.label { color: var(--muted); font-size: 0.85rem; }
+    .summary-card strong { font-size: 1.8rem; }
+
+    table { width: 100%; border-collapse: collapse; border-radius: 16px; overflow: hidden; }
+    thead { background: rgba(15, 82, 186, 0.08); }
+    th, td { padding: 12px 14px; text-align: left; }
+    tbody tr:nth-child(even) { background: rgba(15, 23, 42, 0.03); }
+    tbody tr:hover { background: rgba(15, 82, 186, 0.08); }
+    td.actions { text-align: right; }
+    td.actions button { padding: 8px 14px; border-radius: 10px; border: none; cursor: pointer; background: var(--accent); color: #fff; font-weight: 600; }
+    td.actions button:hover { box-shadow: 0 10px 24px rgba(15, 82, 186, 0.25); }
+
+    form.settings-form {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      margin-bottom: 20px;
+    }
+    form.settings-form label { display: flex; flex-direction: column; gap: 8px; font-weight: 600; color: var(--muted); }
+    form.settings-form input, form.settings-form textarea, form.settings-form select {
+      border-radius: 12px;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      padding: 12px 14px;
+      font-size: 1rem;
+      font-family: inherit;
+    }
+    form.settings-form input[type="color"] { padding: 4px; height: 48px; }
+
+    #cskhTimeline { display: flex; flex-direction: column; gap: 16px; }
+    .timeline-item { padding: 16px; border-radius: 16px; background: rgba(15, 82, 186, 0.06); }
+    .timeline-item header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+    .timeline-item strong { font-size: 1rem; }
+    .status {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: rgba(15, 82, 186, 0.18);
+      color: var(--accent);
+    }
+    .status[data-status="pending"] { background: rgba(246, 201, 14, 0.25); color: #996c05; }
+    .status[data-status="done"] { background: rgba(34, 197, 94, 0.22); color: #15803d; }
+
+    dialog {
+      border: none;
+      border-radius: 20px;
+      padding: 0;
+      max-width: 520px;
+      width: 100%;
+      box-shadow: 0 25px 60px rgba(15, 23, 42, 0.25);
+      overflow: hidden;
+    }
+    dialog::backdrop { background: rgba(15, 23, 42, 0.35); backdrop-filter: blur(2px); }
+    dialog .dialog-inner { padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+    dialog h3 { margin: 0; }
+    dialog form { display: flex; flex-direction: column; gap: 12px; }
+    dialog form input, dialog form textarea, dialog form select {
+      border-radius: 12px;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      padding: 12px 14px;
+      font-family: inherit;
+    }
+    dialog footer { display: flex; justify-content: flex-end; gap: 12px; }
+    dialog button { border: none; border-radius: 10px; padding: 10px 16px; font-weight: 600; cursor: pointer; }
+    dialog button.primary { background: var(--accent); color: #fff; }
+    dialog button.secondary { background: #e5e7eb; color: var(--text); }
+
+    @media (max-width: 960px) {
+      .app-shell { flex-direction: column; }
+      .sidebar { width: 100%; flex-direction: row; align-items: center; justify-content: space-between; padding: 18px 20px; }
+      .sidebar nav { flex-direction: row; flex-wrap: wrap; gap: 10px; }
+      .sidebar nav a { padding: 10px 14px; }
+      .main { padding: 20px; }
+    }
+    @media (max-width: 640px) {
+      .sidebar { align-items: flex-start; }
+      .sidebar nav { width: 100%; }
+      .topbar { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside id="sidebar" class="sidebar">
+      <div class="brand">
+        <img id="brandLogo" src="assets/img/logo-klc.svg" alt="Logo">
+        <div>
+          <h1 id="brandName">KLC Bến Lức</h1>
+          <div id="brandTagline" style="font-size:0.85rem; opacity:0.8;">Hệ thống điều hành</div>
+        </div>
+      </div>
+      <nav>
+        <a href="#dashboard" class="active">Tổng quan</a>
+        <a href="#customers">Khách hàng</a>
+        <a href="#cskh">Chăm sóc KH</a>
+        <a href="#settings">Thiết lập hệ thống</a>
+      </nav>
+    </aside>
+
+    <main id="main" class="main">
+      <div class="topbar">
+        <div>
+          <h2>Trung tâm điều hành</h2>
+          <div class="badge" id="syncIndicator">Đang khởi động...</div>
+        </div>
+        <div class="topbar-actions">
+          <button id="btnManualSync" class="button secondary">Đồng bộ ngay</button>
+          <button id="btnBackupNow" class="button">Sao lưu Google Drive</button>
+        </div>
+      </div>
+
+      <div class="sections">
+        <section id="dashboard-view">
+          <h3>Tổng quan hoạt động</h3>
+          <p class="lead">Theo dõi tức thời các chỉ số chính để quản lý tình hình vận hành.</p>
+          <div id="dashboardSummary" class="summary-grid"></div>
+        </section>
+
+        <section id="customers-view" hidden>
+          <h3>Danh sách khách hàng</h3>
+          <p class="lead">Quản lý thông tin khách hàng và cập nhật hồ sơ nhanh chóng.</p>
+          <div class="table-wrapper">
+            <table id="tblCustomers">
+              <thead>
+                <tr>
+                  <th>Tên</th>
+                  <th>SĐT</th>
+                  <th>Ghi chú</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <dialog id="dlgCustomerDetail">
+            <div class="dialog-inner">
+              <h3>Chi tiết khách hàng</h3>
+              <div id="customerDetailContent"></div>
+              <div>
+                <h4>Cập nhật khách hàng</h4>
+                <form id="frmUpdateCustomer">
+                  <input name="name" placeholder="Tên">
+                  <input name="phone" placeholder="Số điện thoại">
+                  <textarea name="note" placeholder="Ghi chú"></textarea>
+                  <button type="submit" class="primary">Lưu thay đổi</button>
+                </form>
+              </div>
+              <div>
+                <h4>Nhật ký CSKH</h4>
+                <div id="cskhList" style="display:flex; flex-direction:column; gap:12px;"></div>
+                <form id="frmLogCSKH">
+                  <textarea name="content" placeholder="Nội dung chăm sóc" required></textarea>
+                  <select name="status">
+                    <option value="new">Mới</option>
+                    <option value="pending">Đang xử lý</option>
+                    <option value="done">Hoàn tất</option>
+                  </select>
+                  <button type="submit" class="primary">Ghi nhận chăm sóc</button>
+                </form>
+              </div>
+              <footer>
+                <button type="button" class="secondary" id="btnCloseCustomer">Đóng</button>
+              </footer>
+            </div>
+          </dialog>
+        </section>
+
+        <section id="cskh-view" hidden>
+          <h3>Nhật ký chăm sóc khách hàng</h3>
+          <p class="lead">Theo dõi và cập nhật trạng thái hỗ trợ khách hàng.</p>
+          <div id="cskhTimeline"></div>
+        </section>
+
+        <section id="settings-view" hidden>
+          <h3>Thiết lập hệ thống</h3>
+          <p class="lead">Tuỳ chỉnh logo, màu sắc và nhận diện ngay trong trình duyệt – không cần viết code.</p>
+          <form id="frmSettings" class="settings-form">
+            <label>Logo URL
+              <input name="logoUrl" placeholder="https://...">
+            </label>
+            <label>Tên thương hiệu
+              <input name="brandName" placeholder="KLC Bến Lức">
+            </label>
+            <label>Khẩu hiệu
+              <input name="brandTagline" placeholder="Hệ thống điều hành">
+            </label>
+            <label>Màu chủ đạo
+              <input name="primaryColor" type="color" value="#f6c90e">
+            </label>
+            <label>Màu nhấn
+              <input name="accentColor" type="color" value="#0f52ba">
+            </label>
+          </form>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <button type="submit" form="frmSettings" class="button">Lưu thiết lập</button>
+            <button type="button" id="btnResetSettings" class="button secondary">Khôi phục mặc định</button>
+          </div>
+        </section>
+      </div>
+    </main>
   </div>
 
-  <!-- Mobile bottom nav (hiển thị trên màn hình nhỏ) -->
-  <nav id="app-mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-brand-blue flex gap-2 p-2"></nav>
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script>
+    const DEFAULT_SETTINGS = {
+      brandName: 'KLC Bến Lức',
+      brandTagline: 'Hệ thống điều hành',
+      logoUrl: 'assets/img/logo-klc.svg',
+      primaryColor: '#f6c90e',
+      accentColor: '#0f52ba'
+    };
 
-  <script type="module" src="js/dashboard.js"></script>
+    function renderRoute() {
+      const hash = (location.hash || '#dashboard').replace('#', '');
+      document.querySelectorAll('.sidebar nav a').forEach(link => {
+        const target = link.getAttribute('href').replace('#', '');
+        link.classList.toggle('active', target === hash);
+      });
+      document.querySelectorAll('#main > .sections > section').forEach(section => {
+        section.hidden = section.id !== `${hash}-view`;
+      });
+    }
+
+    window.addEventListener('hashchange', renderRoute);
+
+    function renderAll() {
+      applySettings();
+      renderDashboard();
+      renderCustomersTable();
+      renderCSKHTimeline();
+      populateSettingsForm();
+    }
+
+    function applySettings() {
+      const settings = (window.STATE && window.STATE.settings) || {};
+      const merged = { ...DEFAULT_SETTINGS, ...settings };
+      document.getElementById('brandName').textContent = merged.brandName;
+      document.getElementById('brandTagline').textContent = merged.brandTagline;
+      const logoEl = document.getElementById('brandLogo');
+      if (logoEl) {
+        logoEl.src = merged.logoUrl || DEFAULT_SETTINGS.logoUrl;
+      }
+      document.documentElement.style.setProperty('--primary', merged.primaryColor || DEFAULT_SETTINGS.primaryColor);
+      document.documentElement.style.setProperty('--accent', merged.accentColor || DEFAULT_SETTINGS.accentColor);
+    }
+
+    function renderDashboard() {
+      const container = document.getElementById('dashboardSummary');
+      if (!container) return;
+      const customers = (window.STATE && window.STATE.customers) || [];
+      const cskh = (window.STATE && window.STATE.cskh) || [];
+      const done = cskh.filter(item => item.status === 'done').length;
+      const pending = cskh.filter(item => item.status === 'pending').length;
+      const latest = customers.length ? customers.reduce((a, b) => (a.updatedAt > b.updatedAt ? a : b)) : null;
+      container.innerHTML = `
+        <div class="summary-card">
+          <span class="label">Tổng khách hàng</span>
+          <strong>${customers.length}</strong>
+        </div>
+        <div class="summary-card">
+          <span class="label">CSKH đang xử lý</span>
+          <strong>${pending}</strong>
+        </div>
+        <div class="summary-card">
+          <span class="label">CSKH hoàn tất</span>
+          <strong>${done}</strong>
+        </div>
+        <div class="summary-card">
+          <span class="label">Cập nhật gần nhất</span>
+          <strong>${latest ? formatDate(latest.updatedAt) : 'Chưa có'}</strong>
+        </div>`;
+    }
+
+    function renderCustomersTable() {
+      const tbody = document.querySelector('#tblCustomers tbody');
+      if (!tbody) return;
+      const customers = (window.STATE && window.STATE.customers) || [];
+      if (!customers.length) {
+        tbody.innerHTML = `<tr><td colspan="4">Chưa có khách hàng nào.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = customers.map(customer => `
+        <tr>
+          <td>${esc(customer.name)}</td>
+          <td>${esc(customer.phone)}</td>
+          <td>${esc(customer.note || '')}</td>
+          <td class="actions"><button data-customer="${customer.id}">Chi tiết</button></td>
+        </tr>`).join('');
+    }
+
+    function renderCSKHTimeline() {
+      const container = document.getElementById('cskhTimeline');
+      if (!container) return;
+      const customers = (window.STATE && window.STATE.customers) || [];
+      const cskh = (window.STATE && window.STATE.cskh) || [];
+      if (!cskh.length) {
+        container.innerHTML = '<div class="timeline-item">Chưa có nhật ký chăm sóc khách hàng.</div>';
+        return;
+      }
+      const customerMap = new Map(customers.map(c => [c.id, c]));
+      container.innerHTML = cskh
+        .slice()
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+        .map(item => {
+          const customer = customerMap.get(item.customerId);
+          const name = customer ? customer.name : 'Khách hàng';
+          return `<div class="timeline-item">
+            <header>
+              <strong>${esc(name)}</strong>
+              <span class="status" data-status="${esc(item.status)}">${esc(statusLabel(item.status))}</span>
+            </header>
+            <div style="color:var(--muted); font-size:0.85rem;">${formatDate(item.updatedAt)}</div>
+            <p style="margin:8px 0 0; white-space:pre-wrap;">${esc(item.content)}</p>
+          </div>`;
+        }).join('');
+    }
+
+    function populateSettingsForm() {
+      const form = document.getElementById('frmSettings');
+      if (!form) return;
+      const settings = (window.STATE && window.STATE.settings) || {};
+      form.logoUrl.value = settings.logoUrl || '';
+      form.brandName.value = settings.brandName || '';
+      form.brandTagline.value = settings.brandTagline || '';
+      form.primaryColor.value = settings.primaryColor || DEFAULT_SETTINGS.primaryColor;
+      form.accentColor.value = settings.accentColor || DEFAULT_SETTINGS.accentColor;
+    }
+
+    function esc(value) {
+      return (value || '').toString().replace(/[&<>"']/g, match => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[match]);
+    }
+
+    function statusLabel(status) {
+      switch (status) {
+        case 'done': return 'Hoàn tất';
+        case 'pending': return 'Đang xử lý';
+        default: return 'Mới';
+      }
+    }
+
+    function formatDate(value) {
+      if (!value) return '—';
+      try {
+        const date = new Date(value);
+        if (!Number.isFinite(date.getTime())) return value;
+        return date.toLocaleString('vi-VN');
+      } catch (err) {
+        return value;
+      }
+    }
+
+    function openCustomerDetail(id) {
+      const dialog = document.getElementById('dlgCustomerDetail');
+      if (!dialog) return;
+      const customers = (window.STATE && window.STATE.customers) || [];
+      const cskh = (window.STATE && window.STATE.cskh) || [];
+      const customer = customers.find(item => item.id === id);
+      if (!customer) return;
+      const detail = document.getElementById('customerDetailContent');
+      detail.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <div style="font-size:1.1rem; font-weight:600;">${esc(customer.name)}</div>
+          <div style="color:var(--muted);">${esc(customer.phone || 'Chưa có số liên hệ')}</div>
+          <div style="white-space:pre-wrap;">${esc(customer.note || '')}</div>
+          <div style="font-size:0.85rem; color:var(--muted);">Cập nhật: ${formatDate(customer.updatedAt)} bởi ${esc(customer.updatedBy || 'admin')}</div>
+        </div>`;
+      const updateForm = document.getElementById('frmUpdateCustomer');
+      updateForm.name.value = customer.name || '';
+      updateForm.phone.value = customer.phone || '';
+      updateForm.note.value = customer.note || '';
+      updateForm.onsubmit = async (event) => {
+        event.preventDefault();
+        try {
+          await Data.upsertCustomer({ id, name: updateForm.name.value, phone: updateForm.phone.value, note: updateForm.note.value }, 'admin');
+          await Data.syncAll(true);
+          openCustomerDetail(id);
+          toast('Đã lưu thông tin khách hàng.');
+        } catch (err) {
+          console.error(err);
+          toast('Không thể lưu khách hàng.', true);
+        }
+      };
+      const logs = document.getElementById('cskhList');
+      const related = cskh.filter(item => item.customerId === id).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      logs.innerHTML = related.length
+        ? related.map(item => `<div class="timeline-item">
+            <header>
+              <strong>${esc(statusLabel(item.status))}</strong>
+              <span style="font-size:0.8rem; color:var(--muted);">${formatDate(item.updatedAt)}</span>
+            </header>
+            <p style="margin:0; white-space:pre-wrap;">${esc(item.content)}</p>
+          </div>`).join('')
+        : '<div class="timeline-item">Chưa có nhật ký nào.</div>';
+      const logForm = document.getElementById('frmLogCSKH');
+      logForm.reset();
+      logForm.onsubmit = async (event) => {
+        event.preventDefault();
+        const formData = new FormData(logForm);
+        const content = formData.get('content');
+        const status = formData.get('status');
+        if (!content) return;
+        try {
+          await Data.logCSKH({ customerId: id, content, status }, 'admin');
+          logForm.reset();
+          await Data.syncAll(true);
+          openCustomerDetail(id);
+          toast('Đã ghi nhận chăm sóc.');
+        } catch (err) {
+          console.error(err);
+          toast('Không thể ghi nhận chăm sóc.', true);
+        }
+      };
+      if (typeof dialog.showModal === 'function') {
+        dialog.showModal();
+      }
+    }
+
+    function toast(message, isError = false) {
+      const indicator = document.getElementById('syncIndicator');
+      if (indicator) {
+        indicator.textContent = message;
+        indicator.style.background = isError ? 'rgba(220, 38, 38, 0.15)' : 'rgba(34, 197, 94, 0.12)';
+        indicator.style.color = isError ? '#b91c1c' : '#15803d';
+        setTimeout(() => updateSyncIndicator(), 2800);
+      }
+    }
+
+    function updateSyncIndicator() {
+      const indicator = document.getElementById('syncIndicator');
+      if (!indicator) return;
+      const version = Data.version;
+      indicator.textContent = `Version: ${version >= 0 ? version : 'Đang đồng bộ...'}`;
+      indicator.style.background = 'rgba(15, 82, 186, 0.12)';
+      indicator.style.color = 'var(--accent)';
+    }
+
+    document.addEventListener('click', (event) => {
+      const button = event.target.closest('td.actions button');
+      if (button && button.dataset.customer) {
+        openCustomerDetail(button.dataset.customer);
+      }
+    });
+
+    const closeButton = document.getElementById('btnCloseCustomer');
+    if (closeButton) {
+      closeButton.addEventListener('click', () => {
+        const dialog = document.getElementById('dlgCustomerDetail');
+        if (dialog && dialog.open) dialog.close();
+      });
+    }
+
+    const settingsForm = document.getElementById('frmSettings');
+    if (settingsForm) {
+      settingsForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const formData = new FormData(settingsForm);
+        const payload = Object.fromEntries(formData.entries());
+        try {
+          await Data.updateSettings(payload, 'admin');
+          toast('Đã lưu thiết lập hệ thống.');
+          await Data.syncAll(true);
+        } catch (err) {
+          console.error(err);
+          toast('Không thể lưu thiết lập.', true);
+        }
+      });
+    }
+
+    const resetButton = document.getElementById('btnResetSettings');
+    if (resetButton) {
+      resetButton.addEventListener('click', async () => {
+        try {
+          await Data.updateSettings(DEFAULT_SETTINGS, 'admin');
+          toast('Đã khôi phục thiết lập mặc định.');
+          await Data.syncAll(true);
+        } catch (err) {
+          console.error(err);
+          toast('Không thể khôi phục mặc định.', true);
+        }
+      });
+    }
+
+    const manualSync = document.getElementById('btnManualSync');
+    if (manualSync) {
+      manualSync.addEventListener('click', async () => {
+        manualSync.disabled = true;
+        manualSync.textContent = 'Đang đồng bộ...';
+        try {
+          await Data.syncAll(true);
+          toast('Đồng bộ thành công.');
+        } catch (err) {
+          console.error(err);
+          toast('Không thể đồng bộ.', true);
+        } finally {
+          manualSync.disabled = false;
+          manualSync.textContent = 'Đồng bộ ngay';
+        }
+      });
+    }
+
+    const backupButton = document.getElementById('btnBackupNow');
+    if (backupButton) {
+      backupButton.addEventListener('click', async () => {
+        backupButton.disabled = true;
+        backupButton.textContent = 'Đang sao lưu...';
+        try {
+          const result = await Data.backupNow();
+          if (result && result.ok) {
+            toast('Đã sao lưu lên Google Drive.');
+          } else {
+            toast('Sao lưu thất bại.', true);
+          }
+        } catch (err) {
+          console.error(err);
+          toast('Không thể sao lưu.', true);
+        } finally {
+          backupButton.disabled = false;
+          backupButton.textContent = 'Sao lưu Google Drive';
+        }
+      });
+    }
+
+    Data.subscribe(() => {
+      renderAll();
+      updateSyncIndicator();
+    });
+
+    renderRoute();
+    Data.syncAll(true).catch(err => {
+      console.error(err);
+      toast('Không thể tải dữ liệu ban đầu.', true);
+    });
+  </script>
 </body>
 </html>
