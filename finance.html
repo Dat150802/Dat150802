@@ -20,7 +20,7 @@
       <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
 
       <main class="flex-1 p-4 md:p-6 space-y-6">
-        <section class="card p-5 space-y-4">
+        <section class="card p-5 space-y-4" data-module-page="finance" data-module-id="intake">
           <div class="section-title">Ghi nhận thu & chi</div>
           <p class="text-sm text-slate-500">Quản lý tài chính minh bạch cho cửa hàng KLC Bến Lức. Nhân viên có thể nhập, chỉnh sửa và gửi yêu cầu xóa.</p>
           <p id="finance-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang ở chế độ nhân viên: vui lòng ghi rõ lý do khi gửi yêu cầu xóa giao dịch.</p>
@@ -61,7 +61,7 @@
           </div>
         </section>
 
-        <section class="space-y-4">
+        <section class="space-y-4" data-module-page="finance" data-module-id="history">
           <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div class="section-title">Lịch sử thu chi</div>
             <input id="finance-search" class="search-input w-full lg:w-80" placeholder="Tìm theo nội dung hoặc danh mục">
@@ -88,7 +88,7 @@
           </div>
         </section>
 
-        <section class="card p-5 space-y-4">
+        <section class="card p-5 space-y-4" data-module-page="finance" data-module-id="summary">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div class="section-title">Báo cáo theo tháng</div>
             <input type="month" id="finance-month" class="input-brand w-full md:w-auto">
