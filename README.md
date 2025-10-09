@@ -31,7 +31,24 @@
    - Bật GitHub Pages cho nhánh `main` với thư mục gốc `/`.
    - Upload riêng file `config.js` vào phần “Secrets” của hosting (ví dụ dùng GitHub Actions copy) hoặc lưu tại server tĩnh.
 
+codex/fix-issues-in-checklist-page-tqo0oa
 ## Cấu hình Firebase
+
+4. **Đồng bộ & sao lưu**
+   - Vào mục **Tùy chỉnh → Sao lưu & đồng bộ dữ liệu** để bật đồng bộ đám mây cho toàn bộ hệ thống.
+   - Điền địa chỉ API đích (REST endpoint hỗ trợ `PUT` hoặc `POST`) và mã bảo mật nếu có. Hệ thống sẽ tự động đẩy dữ liệu khi có thay đổi và kiểm tra dữ liệu mới theo chu kỳ đã cấu hình.
+   - Có thể bấm **Tải dữ liệu về máy này** hoặc **Gửi dữ liệu lên máy chủ** để đồng bộ thủ công bất kỳ lúc nào.
+   - Ngoài ra vẫn có thể **Xuất file sao lưu** (JSON) và **Nhập từ file sao lưu** để chuyển dữ liệu nhanh giữa các thiết bị hoàn toàn ngoại tuyến.
+
+5. **Truy cập nhanh CheckList**
+   - Sử dụng đường dẫn `checklist.html` để vào thẳng module CheckList công việc (vẫn yêu cầu đăng nhập theo phân quyền).
+ codex/fix-issues-in-checklist-page-tahi62
+
+
+5. **Truy cập nhanh CheckList**
+   - Sử dụng đường dẫn `checklist.html` để vào thẳng module CheckList công việc (vẫn yêu cầu đăng nhập theo phân quyền).
+ main
+ main
 
 1. Tạo project Firebase mới, bật Firestore (chế độ production) và Firebase Authentication (Email/Password).
 2. Lấy thông tin cấu hình Web app (apiKey, authDomain, projectId, ...) và điền vào `config.js`.

@@ -3,16 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+codex/fix-issues-in-checklist-page-tqo0oa
   <title>KLC Bến Lức - Hệ thống quản trị nội bộ</title>
+
+  <title>CheckList công việc - KLC Bến Lức</title>
+ main
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+ codex/fix-issues-in-checklist-page-tqo0oa
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
+
+ main
   <script type="module" src="app.js" defer></script>
 </head>
 <body data-default-page="checklist" data-single-page="checklist">
@@ -21,6 +28,7 @@
     <p id="loader-message">Đang xử lý...</p>
   </div>
 
+ codex/fix-issues-in-checklist-page-tqo0oa
   <div id="migration-banner" class="migration-banner hidden">
     <div>
       <strong>Phát hiện dữ liệu cũ trên thiết bị này.</strong>
@@ -32,6 +40,8 @@
     </div>
   </div>
 
+
+ main
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
@@ -42,11 +52,19 @@
         </div>
       </div>
       <nav>
+ codex/fix-issues-in-checklist-page-tqo0oa
         <button class="nav-link active" data-target="dashboard">Trang chủ</button>
         <button class="nav-link" data-target="customers">Khách hàng</button>
         <button class="nav-link" data-target="care">CSKH</button>
         <button class="nav-link" data-target="service">Bảo hành &amp; Bảo dưỡng</button>
         <button class="nav-link" data-target="checklist">CheckList công việc</button>
+
+        <button class="nav-link" data-target="dashboard">Trang chủ</button>
+        <button class="nav-link" data-target="customers">Khách hàng</button>
+        <button class="nav-link" data-target="care">CSKH</button>
+        <button class="nav-link" data-target="service">Bảo hành &amp; Bảo dưỡng</button>
+        <button class="nav-link active" data-target="checklist">CheckList công việc</button>
+ main
         <button class="nav-link" data-target="inventory">Tồn kho</button>
         <button class="nav-link" data-target="finance">Thu &amp; Chi</button>
         <button class="nav-link" data-target="settings">Tùy chỉnh</button>
@@ -62,8 +80,13 @@
           <img src="assets/logo.svg" alt="Logo KLC" class="login-logo" />
           <h2>Đăng nhập hệ thống</h2>
           <form id="login-form">
+ codex/fix-issues-in-checklist-page-tqo0oa
             <label>Email
               <input type="email" id="login-email" required autocomplete="username" />
+
+            <label>Tài khoản
+              <input type="text" id="login-username" required autocomplete="username" />
+ main
             </label>
             <label>Mật khẩu
               <input type="password" id="login-password" required autocomplete="current-password" />
@@ -81,6 +104,7 @@
         </div>
       </section>
 
+ codex/fix-issues-in-checklist-page-tqo0oa
       <section id="seed-admin-card" class="card hidden">
         <div class="login-card">
           <img src="assets/logo.svg" alt="Logo KLC" class="login-logo" />
@@ -112,6 +136,12 @@
             </label>
             <button id="layout-reset" class="ghost small">Khôi phục mặc định</button>
           </div>
+
+      <section id="dashboard" class="page">
+        <header class="page-header">
+          <h2>Trang chủ</h2>
+          <p>Thống kê tổng quan các hoạt động</p>
+ main
         </header>
         <div class="grid dashboard-grid" id="dashboard-widgets">
           <article class="card widget" data-widget="customers">
@@ -628,6 +658,13 @@
           </div>
         </div>
       </section>
+ codex/fix-issues-in-checklist-page-tqo0oa
+
+ codex/fix-issues-in-checklist-page-tahi62
+
+
+main
+main
       <section id="inventory" class="page">
         <header class="page-header">
           <h2>Tồn kho</h2>
@@ -820,6 +857,10 @@
             </table>
           </div>
         </div>
+ codex/fix-issues-in-checklist-page-tqo0oa
+
+ codex/fix-issues-in-checklist-page-tahi62
+ main
         <div class="card">
           <header class="section-header">
             <h3>Yêu cầu phê duyệt</h3>
@@ -840,6 +881,7 @@
             <tbody></tbody>
           </table>
         </div>
+ codex/fix-issues-in-checklist-page-tqo0oa
         <div class="card">
           <header>
             <h3>Sao lưu &amp; Google Drive</h3>
@@ -851,6 +893,91 @@
           </div>
           <p id="backup-status" class="backup-status">Chưa thực hiện sao lưu.</p>
         </div>
+
+
+
+ main
+        <div class="card">
+          <header class="section-header">
+            <h3>Sao lưu &amp; đồng bộ dữ liệu</h3>
+            <span class="sync-badge offline" id="sync-status-badge">Đang tắt</span>
+          </header>
+          <p class="muted-text">Kích hoạt đồng bộ để toàn bộ thiết bị cùng cập nhật dữ liệu. Có thể xuất/nhập file sao lưu để sao chép dữ liệu thủ công khi cần.</p>
+          <form id="sync-config-form" class="form-grid">
+            <label class="checkbox full">
+              <input type="checkbox" name="enabled" />
+              <span>Bật đồng bộ đám mây cho toàn bộ tài khoản</span>
+            </label>
+            <label class="full">Địa chỉ máy chủ đồng bộ
+              <input type="url" name="remoteUrl" placeholder="https://example.com/api/klc" disabled />
+            </label>
+            <label>Phương thức cập nhật
+              <select name="method" disabled>
+                <option value="PUT" selected>PUT</option>
+                <option value="POST">POST</option>
+              </select>
+            </label>
+            <label>API Key / Token (tuỳ chọn)
+              <input type="text" name="apiKey" placeholder="Nhập khóa bảo mật" disabled />
+            </label>
+            <label>Chu kỳ kiểm tra (phút)
+              <input type="number" name="interval" min="1" max="120" value="5" disabled />
+            </label>
+            <div class="form-actions full">
+              <button type="submit" class="primary">Lưu cấu hình</button>
+              <button type="button" class="ghost" id="sync-test">Kiểm tra kết nối</button>
+            </div>
+          </form>
+          <div class="sync-actions">
+            <button type="button" class="secondary" data-sync-action="pull">Tải dữ liệu về máy này</button>
+            <button type="button" class="secondary" data-sync-action="push">Gửi dữ liệu lên máy chủ</button>
+            <button type="button" class="ghost" data-sync-action="export">Xuất file sao lưu</button>
+            <button type="button" class="ghost" data-sync-action="import">Nhập từ file sao lưu</button>
+            <input type="file" id="sync-import-input" accept="application/json" hidden />
+          </div>
+          <div class="sync-status" id="sync-status">
+            <p><strong>Trạng thái:</strong> <span class="status-dot offline"></span>Đang tắt đồng bộ</p>
+            <p><strong>Máy chủ:</strong> Chưa cấu hình</p>
+            <p><strong>Lần gửi:</strong> Chưa có</p>
+            <p><strong>Lần tải:</strong> Chưa có</p>
+          </div>
+        </div>
+ codex/fix-issues-in-checklist-page-tahi62
+
+
+main
+        <div class="card">
+          <header>
+            <h3>Tùy chỉnh bố cục trang chủ</h3>
+          </header>
+          <p>Quản trị viên có thể kéo thả để sắp xếp lại các thẻ thống kê trên trang chủ.</p>
+          <button id="toggle-layout-edit" class="secondary">Bật chế độ chỉnh sửa</button>
+        </div>
+ codex/fix-issues-in-checklist-page-tahi62
+
+
+        <div class="card">
+          <header class="section-header">
+            <h3>Yêu cầu phê duyệt</h3>
+            <div class="actions">
+              <button id="clear-approvals" class="ghost">Xóa danh sách</button>
+            </div>
+          </header>
+          <table class="data-table" id="approval-table">
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>Loại</th>
+                <th>Chi tiết</th>
+                <th>Người yêu cầu</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+ main
+ main
       </section>
     </main>
   </div>

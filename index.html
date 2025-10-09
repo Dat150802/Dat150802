@@ -841,6 +841,51 @@
           </table>
         </div>
         <div class="card">
+          <header class="section-header">
+            <h3>Sao lưu &amp; đồng bộ dữ liệu</h3>
+            <span class="sync-badge offline" id="sync-status-badge">Đang tắt</span>
+          </header>
+          <p class="muted-text">Kích hoạt đồng bộ để mọi thiết bị cùng chia sẻ dữ liệu mới nhất. Hệ thống cũng hỗ trợ xuất/nhập file sao lưu phòng trường hợp ngoại tuyến.</p>
+          <form id="sync-config-form" class="form-grid">
+            <label class="checkbox full">
+              <input type="checkbox" name="enabled" />
+              <span>Bật đồng bộ đám mây cho toàn bộ tài khoản</span>
+            </label>
+            <label class="full">Địa chỉ máy chủ đồng bộ
+              <input type="url" name="remoteUrl" placeholder="https://example.com/api/klc" disabled />
+            </label>
+            <label>Phương thức cập nhật
+              <select name="method" disabled>
+                <option value="PUT" selected>PUT</option>
+                <option value="POST">POST</option>
+              </select>
+            </label>
+            <label>API Key / Token (tuỳ chọn)
+              <input type="text" name="apiKey" placeholder="Nhập khóa bảo mật" disabled />
+            </label>
+            <label>Chu kỳ kiểm tra (phút)
+              <input type="number" name="interval" min="1" max="120" value="5" disabled />
+            </label>
+            <div class="form-actions full">
+              <button type="submit" class="primary">Lưu cấu hình</button>
+              <button type="button" class="ghost" id="sync-test">Kiểm tra kết nối</button>
+            </div>
+          </form>
+          <div class="sync-actions">
+            <button type="button" class="secondary" data-sync-action="pull">Tải dữ liệu về máy này</button>
+            <button type="button" class="secondary" data-sync-action="push">Gửi dữ liệu lên máy chủ</button>
+            <button type="button" class="ghost" data-sync-action="export">Xuất file sao lưu</button>
+            <button type="button" class="ghost" data-sync-action="import">Nhập từ file sao lưu</button>
+            <input type="file" id="sync-import-input" accept="application/json" hidden />
+          </div>
+          <div class="sync-status" id="sync-status">
+            <p><strong>Trạng thái:</strong> <span class="status-dot offline"></span>Đang tắt đồng bộ</p>
+            <p><strong>Máy chủ:</strong> Chưa cấu hình</p>
+            <p><strong>Lần gửi:</strong> Chưa có</p>
+            <p><strong>Lần tải:</strong> Chưa có</p>
+          </div>
+        </div>
+        <div class="card">
           <header>
             <h3>Sao lưu &amp; Google Drive</h3>
           </header>
