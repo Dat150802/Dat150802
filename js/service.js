@@ -10,8 +10,11 @@ import {
 import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
 import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
+import { applyPageModules, watchPageModules } from './core/modules.js';
 
 const user = initApp('service');
+applyPageModules('service');
+watchPageModules('service');
 let services = readCollection('services');
 const COLLECTION = 'services';
 

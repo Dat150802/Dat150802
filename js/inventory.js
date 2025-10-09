@@ -3,8 +3,11 @@ import { appendItem, readCollection, generateId, removeItem, subscribeCollection
 import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
 import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
+import { applyPageModules, watchPageModules } from './core/modules.js';
 
 const user = initApp('inventory');
+applyPageModules('inventory');
+watchPageModules('inventory');
 let records = readCollection('inventory');
 const COLLECTION = 'inventory';
 

@@ -10,8 +10,14 @@ import {
 import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
 import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
+import { applyPageModules, watchPageModules } from './core/modules.js';
 
 const user = initApp('checklist');
+ codex/fix-errors-and-complete-code-sy3thi
+applyPageModules('checklist');
+watchPageModules('checklist');
+
+ codex/build-internal-website-for-klc-ben-luc-b5jncf
 let checklists = readCollection('checklists');
 let staffList = getStaff();
 const COLLECTION = 'checklists';

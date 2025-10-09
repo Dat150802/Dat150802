@@ -16,7 +16,14 @@ import {
   saveSyncConfig,
   getSyncStatus,
   testSyncConnection,
-  triggerSyncNow
+  triggerSyncNow,
+  connectDrive,
+  disconnectDrive,
+  downloadDriveBackup,
+  getDriveStatus,
+  getDefaultPageModules,
+  getPageModulesConfig,
+  savePageModulesConfig
 } from './core/storage.js';
 import { getDeletionRequests, resolveDeletionRequest } from './core/deletion.js';
 
@@ -38,6 +45,73 @@ const syncLastPull = document.getElementById('sync-last-pull');
 const syncError = document.getElementById('sync-error');
 const syncEndpointDisplay = document.getElementById('sync-endpoint-display');
 const syncCopyBtn = document.getElementById('sync-copy');
+const syncProviderSelect = document.getElementById('sync-provider');
+const endpointSettings = document.getElementById('endpoint-settings');
+const driveSettings = document.getElementById('drive-settings');
+const driveActions = document.getElementById('drive-actions');
+const driveStatusWrapper = document.getElementById('drive-status-wrapper');
+const driveAccount = document.getElementById('drive-account');
+const driveFileDisplay = document.getElementById('drive-file-display');
+const driveConnectBtn = document.getElementById('drive-connect');
+const driveDisconnectBtn = document.getElementById('drive-disconnect');
+const driveBackupBtn = document.getElementById('drive-backup');
+const driveClientId = document.getElementById('drive-client-id');
+const driveApiKey = document.getElementById('drive-api-key');
+const driveFolderId = document.getElementById('drive-folder-id');
+const driveFileName = document.getElementById('drive-file-name');
+const driveFileId = document.getElementById('drive-file-id');
+const desktopSectionNav = document.getElementById('system-section-nav');
+const mobileSectionNav = document.getElementById('system-section-nav-mobile');
+
+const PAGE_MODULE_DEFINITIONS={
+  customers:{
+    label:'Khách hàng',
+    modules:{
+      overview:{ label:'Thông tin khách hàng', description:'Biểu mẫu nhập và phân loại khách hàng.' },
+      pending:{ label:'Tư vấn & ghi chú', description:'Các ghi chú tư vấn, thông tin trả góp, mẫu ghế.' },
+      list:{ label:'Danh sách khách hàng', description:'Bảng quản lý khách với thao tác xem chi tiết.' },
+      timeline:{ label:'Dòng thời gian khách & CSKH', description:'Nhật ký hoạt động của khách và chăm sóc.' }
+    }
+  },
+  care:{
+    label:'Chăm sóc khách',
+    modules:{
+      form:{ label:'Ghi nhận chăm sóc', description:'Biểu mẫu lưu lịch sử tương tác với khách.' },
+      table:{ label:'Danh sách chăm sóc', description:'Bảng lịch sử CSKH và yêu cầu xóa.' },
+      timeline:{ label:'Dòng thời gian CSKH', description:'Tổng hợp hoạt động khách hàng và phản hồi.' }
+    }
+  },
+  service:{
+    label:'Bảo hành & bảo dưỡng',
+    modules:{
+      intake:{ label:'Phiếu bảo hành/bảo dưỡng', description:'Form tiếp nhận yêu cầu của khách.' },
+      lists:{ label:'Danh sách yêu cầu', description:'Theo dõi trạng thái hỗ trợ và linh kiện.' }
+    }
+  },
+  inventory:{
+    label:'Tồn kho',
+    modules:{
+      intake:{ label:'Nhập liệu xuất/nhập', description:'Ghi nhận giao dịch tồn kho mỗi ngày.' },
+      history:{ label:'Lịch sử xuất nhập', description:'Danh sách chi tiết giao dịch tồn kho.' },
+      summary:{ label:'Tồn kho hiện tại', description:'Tổng hợp số lượng tồn theo sản phẩm.' }
+    }
+  },
+  finance:{
+    label:'Thu & Chi',
+    modules:{
+      intake:{ label:'Ghi nhận thu & chi', description:'Form nhập giao dịch tài chính.' },
+      history:{ label:'Lịch sử thu chi', description:'Bảng quản lý các giao dịch thu/chi.' },
+      summary:{ label:'Báo cáo theo tháng', description:'Bảng tổng hợp kết quả theo tháng.' }
+    }
+  },
+  checklist:{
+    label:'Checklist công việc',
+    modules:{
+      intake:{ label:'Lịch làm việc & báo cáo', description:'Biểu mẫu lập kế hoạch và ghi chú checklist.' },
+      list:{ label:'Danh sách checklist', description:'Toàn bộ checklist đã tạo và trạng thái.' }
+    }
+  }
+};
 
 if(!isAdmin){
   document.getElementById('system-form-wrapper').classList.add('hidden');
@@ -50,7 +124,10 @@ if(!isAdmin){
   renderDeletionRequests();
   setupStaffManager();
   setupSyncManager();
+  setupPageModuleManager();
 }
+
+setupSectionNavigation();
 
 window.addEventListener('klc:userlist-updated',()=>{
   ensureAdminUserList();
@@ -59,6 +136,10 @@ window.addEventListener('klc:userlist-updated',()=>{
 
 window.addEventListener('klc:sync-updated',evt=>{
   updateSyncStatus(evt?.detail||getSyncStatus());
+});
+
+window.addEventListener('klc:drive-status',evt=>{
+  updateDriveStatusView(getSyncConfig(), { ...getSyncStatus(), drive: evt.detail });
 });
 
 function setupUserForm(){
@@ -268,45 +349,96 @@ function setupStaffManager(){
 function setupSyncManager(){
   if(!syncForm) return;
   const config=getSyncConfig();
-  syncForm.elements.enabled.checked=!!config.enabled;
-  syncForm.elements.endpoint.value=config.endpoint||'';
-  syncForm.elements.method.value=config.method||'PUT';
-  syncForm.elements.authScheme.value=config.authScheme||'Bearer';
-  syncForm.elements.apiKey.value=config.apiKey||'';
-  syncForm.elements.headers.value=headersToTextarea(config.headers);
-  syncForm.elements.pollInterval.value=Math.max(5, Math.round((config.pollInterval||15000)/1000));
+  populateSyncForm(config);
   toggleSyncInputs(config.enabled);
-  refreshSyncEndpointField(config.endpoint);
-
-  syncForm.elements.enabled.addEventListener('change',()=>{
-    toggleSyncInputs(syncForm.elements.enabled.checked);
-  });
-
-  syncSaveBtn?.addEventListener('click',handleSyncSave);
-  syncTestBtn?.addEventListener('click',handleSyncTest);
-  syncNowBtn?.addEventListener('click',handleSyncNow);
-  syncCopyBtn?.addEventListener('click',handleSyncCopy);
 
   if(typeof fetch!=='function' && syncError){
     syncError.textContent='Trình duyệt hiện tại không hỗ trợ Fetch API để đồng bộ đám mây.';
     syncError.classList.remove('hidden');
   }
 
+  syncForm.elements.enabled.addEventListener('change',()=>{
+    toggleSyncInputs(syncForm.elements.enabled.checked);
+  });
+
+  syncProviderSelect?.addEventListener('change',()=>{
+    applyProviderView(syncProviderSelect.value);
+    refreshSyncEndpointField(getSyncConfig());
+    updateDriveStatusView(getSyncConfig(), getSyncStatus());
+  });
+
+  syncSaveBtn?.addEventListener('click',handleSyncSave);
+  syncTestBtn?.addEventListener('click',handleSyncTest);
+  syncNowBtn?.addEventListener('click',handleSyncNow);
+  syncCopyBtn?.addEventListener('click',handleSyncCopy);
+  driveConnectBtn?.addEventListener('click',handleDriveConnect);
+  driveDisconnectBtn?.addEventListener('click',handleDriveDisconnect);
+  driveBackupBtn?.addEventListener('click',handleDriveBackup);
+
   updateSyncStatus(getSyncStatus());
+}
+
+function populateSyncForm(config){
+  if(!syncForm) return;
+  syncForm.elements.enabled.checked=!!config.enabled;
+  if(syncProviderSelect){
+    syncProviderSelect.value=config.provider||'endpoint';
+  }
+  syncForm.elements.endpoint.value=config.endpoint||'';
+  syncForm.elements.method.value=config.method||'PUT';
+  syncForm.elements.authScheme.value=config.authScheme||'Bearer';
+  syncForm.elements.apiKey.value=config.apiKey||'';
+  syncForm.elements.headers.value=headersToTextarea(config.headers);
+  syncForm.elements.pollInterval.value=Math.max(5, Math.round((config.pollInterval||15000)/1000));
+  const drive=config.googleDrive||{};
+  if(driveClientId) driveClientId.value=drive.clientId||'';
+  if(driveApiKey) driveApiKey.value=drive.apiKey||'';
+  if(driveFolderId) driveFolderId.value=drive.folderId||'';
+  if(driveFileName) driveFileName.value=drive.fileName||'klc-database.json';
+  if(driveFileId) driveFileId.value=drive.fileId||'';
+  applyProviderView(config.provider||'endpoint');
+  refreshSyncEndpointField(config);
+}
+
+function applyProviderView(provider){
+  if(endpointSettings){
+    endpointSettings.classList.toggle('hidden',provider==='googleDrive');
+  }
+  if(driveSettings){
+    driveSettings.classList.toggle('hidden',provider!=='googleDrive');
+  }
+  if(driveActions){
+    driveActions.classList.toggle('hidden',provider!=='googleDrive');
+  }
 }
 
 function toggleSyncInputs(enabled){
   if(!syncForm) return;
   syncForm.querySelectorAll('[data-sync-field]').forEach(field=>{
     if(field.name==='enabled') return;
+    if(field.dataset.keepEnabled!==undefined){
+      field.disabled=false;
+      field.classList.remove('opacity-60','cursor-not-allowed','pointer-events-none');
+      return;
+    }
     field.disabled=!enabled;
     field.classList.toggle('opacity-60',!enabled);
+    field.classList.toggle('cursor-not-allowed',!enabled);
+    field.classList.toggle('pointer-events-none',!enabled);
   });
+  [driveConnectBtn,driveDisconnectBtn,driveBackupBtn].forEach(btn=>setButtonState(btn,!enabled));
+  updateDriveStatusView(getSyncConfig(), getSyncStatus());
 }
 
-function refreshSyncEndpointField(endpoint){
-  if(syncEndpointDisplay){
-    syncEndpointDisplay.value=endpoint||'';
+function refreshSyncEndpointField(config){
+  if(!syncEndpointDisplay) return;
+  const provider=syncProviderSelect?.value||config?.provider||'endpoint';
+  if(provider==='googleDrive'){
+    const fileId=config?.googleDrive?.fileId||driveFileId?.value||'';
+    syncEndpointDisplay.value=fileId?`File ID: ${fileId}`:'Chưa liên kết Google Drive';
+  }else{
+    const endpointValue=config?.endpoint||syncForm?.elements?.endpoint?.value||'';
+    syncEndpointDisplay.value=endpointValue;
   }
 }
 
@@ -330,33 +462,53 @@ function parseHeaderText(raw){
 function collectSyncConfig({ requireEnabled=false }={}){
   if(!syncForm) return null;
   const enabled=syncForm.elements.enabled.checked;
-  const endpoint=syncForm.elements.endpoint.value.trim();
+  const provider=syncProviderSelect?.value||'endpoint';
   if(requireEnabled && !enabled){
     toast('Vui lòng bật đồng bộ trước khi thực hiện.','error');
     return null;
   }
-  if(enabled && !endpoint){
-    toast('Vui lòng nhập địa chỉ máy chủ khi bật đồng bộ.','error');
-    return null;
-  }
   const pollSeconds=parseInt(syncForm.elements.pollInterval.value,10);
-  return {
+  const payload={
     enabled,
-    endpoint,
+    provider,
+    endpoint:syncForm.elements.endpoint.value.trim(),
     method:syncForm.elements.method.value||'PUT',
     authScheme:syncForm.elements.authScheme.value||'Bearer',
     apiKey:syncForm.elements.apiKey.value.trim(),
     headers:parseHeaderText(syncForm.elements.headers.value),
     pollInterval:Math.max(5, Number.isNaN(pollSeconds)?15:pollSeconds)*1000
   };
+  if(provider==='googleDrive'){
+    const driveConfig={
+      clientId:driveClientId?.value.trim()||'',
+      apiKey:driveApiKey?.value.trim()||'',
+      folderId:driveFolderId?.value.trim()||'',
+      fileName:driveFileName?.value.trim()||'klc-database.json',
+      fileId:driveFileId?.value.trim()||''
+    };
+    if(requireEnabled && !driveConfig.clientId){
+      toast('Vui lòng nhập Google Client ID.','error');
+      return null;
+    }
+    if(requireEnabled && !driveConfig.apiKey){
+      toast('Vui lòng nhập Google API Key.','error');
+      return null;
+    }
+    payload.googleDrive=driveConfig;
+  }else if(enabled && !payload.endpoint){
+    toast('Vui lòng nhập địa chỉ máy chủ khi bật đồng bộ.','error');
+    return null;
+  }
+  return payload;
 }
 
 async function handleSyncSave(evt){
   evt.preventDefault();
   const config=collectSyncConfig();
   if(!config) return;
-  saveSyncConfig(config);
-  refreshSyncEndpointField(getSyncConfig().endpoint);
+  const saved=saveSyncConfig(config);
+  populateSyncForm(saved);
+  refreshSyncEndpointField(saved);
   toast('Đã cập nhật cấu hình đồng bộ dữ liệu.','success');
   updateSyncStatus(getSyncStatus());
 }
@@ -365,13 +517,15 @@ async function handleSyncTest(evt){
   evt.preventDefault();
   const config=collectSyncConfig({ requireEnabled:true });
   if(!config) return;
-  saveSyncConfig(config);
-  refreshSyncEndpointField(getSyncConfig().endpoint);
+  const saved=saveSyncConfig(config);
+  populateSyncForm(saved);
+  refreshSyncEndpointField(saved);
   updateSyncStatus(getSyncStatus());
   try{
     showLoading('Đang kiểm tra kết nối…');
     await testSyncConnection();
-    toast('Máy chủ đồng bộ phản hồi tốt.','success');
+    const provider=saved.provider||'endpoint';
+    toast(provider==='googleDrive'?'Kết nối Google Drive sẵn sàng.':'Máy chủ đồng bộ phản hồi tốt.','success');
   }catch(err){
     toast(err.message||'Không thể kết nối máy chủ đồng bộ.','error');
   }finally{
@@ -383,8 +537,9 @@ async function handleSyncNow(evt){
   evt.preventDefault();
   const config=collectSyncConfig({ requireEnabled:true });
   if(!config) return;
-  saveSyncConfig(config);
-  refreshSyncEndpointField(getSyncConfig().endpoint);
+  const saved=saveSyncConfig(config);
+  populateSyncForm(saved);
+  refreshSyncEndpointField(saved);
   updateSyncStatus(getSyncStatus());
   try{
     showLoading('Đang đồng bộ dữ liệu với máy chủ…');
@@ -399,17 +554,16 @@ async function handleSyncNow(evt){
 
 function handleSyncCopy(evt){
   evt.preventDefault();
-  const liveEndpoint=(syncEndpointDisplay?.value||'').trim();
-  const formEndpoint=syncForm?.elements?.endpoint?.value?.trim()||'';
-  const endpoint=liveEndpoint||formEndpoint||getSyncConfig().endpoint||'';
-  if(!endpoint){
-    toast('Chưa có đường dẫn đồng bộ để sao chép.','error');
+  const config=getSyncConfig();
+  const shareValue=getSyncShareValue(config);
+  if(!shareValue){
+    toast('Chưa có thông tin đồng bộ để sao chép.','error');
     return;
   }
   const copyText=async()=>{
     if(navigator.clipboard?.writeText){
-      await navigator.clipboard.writeText(endpoint);
-      toast('Đã sao chép đường dẫn đồng bộ.','success');
+      await navigator.clipboard.writeText(shareValue);
+      toast('Đã sao chép thông tin đồng bộ.','success');
       return true;
     }
     return false;
@@ -418,7 +572,7 @@ function handleSyncCopy(evt){
     if(success) return;
     try{
       const temp=document.createElement('textarea');
-      temp.value=endpoint;
+      temp.value=shareValue;
       temp.setAttribute('readonly','');
       temp.style.position='absolute';
       temp.style.left='-9999px';
@@ -426,11 +580,93 @@ function handleSyncCopy(evt){
       temp.select();
       document.execCommand('copy');
       document.body.removeChild(temp);
-      toast('Đã sao chép đường dẫn đồng bộ.','success');
+      toast('Đã sao chép thông tin đồng bộ.','success');
     }catch(err){
-      toast('Không thể sao chép tự động, vui lòng copy thủ công từ ô bên cạnh.','error');
+      toast('Không thể sao chép tự động, vui lòng copy thủ công từ ô hiển thị.','error');
     }
   });
+}
+
+async function handleDriveConnect(evt){
+  evt.preventDefault();
+  const config=collectSyncConfig();
+  if(!config) return;
+  if((config.provider||'endpoint')!=='googleDrive'){
+    toast('Hãy chọn Google Drive làm nền tảng đồng bộ trước khi kết nối.','error');
+    return;
+  }
+  const saved=saveSyncConfig(config);
+  populateSyncForm(saved);
+  try{
+    showLoading('Đang kết nối Google Drive…');
+    const result=await connectDrive({ ensureFile:true });
+    const refreshed=getSyncConfig();
+    populateSyncForm(refreshed);
+    refreshSyncEndpointField(refreshed);
+    updateSyncStatus(getSyncStatus());
+    const created=result?.ensured?.created;
+    toast(created?'Đã tạo file sao lưu trên Google Drive.':'Đã kết nối Google Drive thành công.','success');
+  }catch(err){
+    toast(err.message||'Không thể kết nối Google Drive.','error');
+  }finally{
+    hideLoading();
+  }
+}
+
+async function handleDriveDisconnect(evt){
+  evt.preventDefault();
+  try{
+    await disconnectDrive();
+    updateSyncStatus(getSyncStatus());
+    toast('Đã ngắt kết nối Google Drive.','success');
+  }catch(err){
+    toast(err.message||'Không thể ngắt kết nối Google Drive.','error');
+  }
+}
+
+async function handleDriveBackup(evt){
+  evt.preventDefault();
+  const config=getSyncConfig();
+  if((config.provider||'endpoint')!=='googleDrive'){
+    toast('Hãy chuyển sang chế độ Google Drive để sao lưu.','error');
+    return;
+  }
+  if(!config.googleDrive?.fileId){
+    toast('Chưa tìm thấy file sao lưu trên Google Drive.','error');
+    return;
+  }
+  try{
+    showLoading('Đang tải bản sao lưu từ Google Drive…');
+    const { blob, fileName }=await downloadDriveBackup();
+    const url=URL.createObjectURL(blob);
+    const anchor=document.createElement('a');
+    anchor.href=url;
+    anchor.download=fileName||'klc-database.json';
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    toast('Đã tải bản sao lưu về máy.','success');
+  }catch(err){
+    toast(err.message||'Không thể tải bản sao lưu Google Drive.','error');
+  }finally{
+    hideLoading();
+  }
+}
+
+function getSyncShareValue(config){
+  if((config.provider||'endpoint')==='googleDrive'){
+    return config.googleDrive?.fileId||'';
+  }
+  return config.endpoint||'';
+}
+
+function setButtonState(button,disabled){
+  if(!button) return;
+  button.disabled=!!disabled;
+  button.classList.toggle('opacity-50',!!disabled);
+  button.classList.toggle('cursor-not-allowed',!!disabled);
+  button.classList.toggle('pointer-events-none',!!disabled);
 }
 
 function updateSyncStatus(status){
@@ -448,14 +684,180 @@ function updateSyncStatus(status){
     syncError.textContent=status.lastError||'';
     syncError.classList.toggle('hidden',!status.lastError);
   }
-  [syncTestBtn, syncNowBtn].forEach(btn=>{
-    if(!btn) return;
-    btn.disabled=!enabled;
-    btn.classList.toggle('opacity-50',!enabled);
-    btn.classList.toggle('cursor-not-allowed',!enabled);
-    btn.classList.toggle('pointer-events-none',!enabled);
+  [syncTestBtn,syncNowBtn].forEach(btn=>setButtonState(btn,!enabled));
+  const config=getSyncConfig();
+  refreshSyncEndpointField(config);
+  updateDriveStatusView(config,status);
+}
+
+function updateDriveStatusView(config,status){
+  if(!driveStatusWrapper) return;
+  const provider=config?.provider||'endpoint';
+  const driveInfo=config?.googleDrive||{};
+  const driveState=status?.drive||getDriveStatus();
+  const visible=provider==='googleDrive';
+  driveStatusWrapper.classList.toggle('hidden',!visible);
+  if(!visible){
+    setButtonState(driveConnectBtn,true);
+    setButtonState(driveDisconnectBtn,true);
+    setButtonState(driveBackupBtn,true);
+    return;
+  }
+  if(driveAccount){
+    driveAccount.textContent=driveState?.profile?.email||'Chưa đăng nhập';
+  }
+  if(driveFileDisplay){
+    driveFileDisplay.textContent=driveInfo.fileId?`${driveInfo.fileName||'klc-database.json'} (${driveInfo.fileId})`:'Chưa liên kết';
+  }
+  const canDisconnect=!!driveState?.signedIn && !!config.enabled;
+  const canBackup=!!driveInfo.fileId && !!driveState?.signedIn && !!config.enabled;
+  setButtonState(driveConnectBtn,!config.enabled);
+  setButtonState(driveDisconnectBtn,!canDisconnect);
+  setButtonState(driveBackupBtn,!canBackup);
+}
+
+function setupPageModuleManager(){
+  const pageSelect=document.getElementById('modules-page-select');
+  const toggleList=document.getElementById('modules-toggle-list');
+  const resetPageBtn=document.getElementById('modules-reset-page');
+  const resetAllBtn=document.getElementById('modules-reset-all');
+  if(!pageSelect || !toggleList) return;
+
+  let defaults=getDefaultPageModules();
+  let modulesConfig=getPageModulesConfig();
+  const pages=Object.keys(PAGE_MODULE_DEFINITIONS);
+
+  if(!pages.length){
+    document.getElementById('section-pages')?.classList.add('hidden');
+    return;
+  }
+
+  pageSelect.innerHTML=pages.map(page=>`<option value="${page}">${PAGE_MODULE_DEFINITIONS[page].label}</option>`).join('');
+  if(!pageSelect.value){
+    pageSelect.value=pages[0];
+  }
+
+  const render=()=>{
+    const page=pageSelect.value;
+    const definition=PAGE_MODULE_DEFINITIONS[page];
+    if(!definition){
+      toggleList.innerHTML='<p class="text-sm text-slate-500">Chưa có cấu hình cho trang này.</p>';
+      return;
+    }
+    const state={ ...(defaults[page]||{}), ...(modulesConfig[page]||{}) };
+    toggleList.innerHTML=Object.entries(definition.modules).map(([moduleId, meta])=>{
+      const checked=state[moduleId]!==false;
+      const description=meta.description?`<small>${meta.description}</small>`:'';
+      return `<label class="module-toggle" data-module="${moduleId}">
+        <div>
+          <strong>${meta.label}</strong>
+          ${description}
+        </div>
+        <input type="checkbox" class="toggle-switch" data-module-id="${moduleId}" ${checked?'checked':''}>
+      </label>`;
+    }).join('');
+    toggleList.querySelectorAll('input[data-module-id]').forEach(input=>{
+      input.addEventListener('change',()=>{
+        const moduleId=input.dataset.moduleId;
+        const label=definition.modules[moduleId]?.label||moduleId;
+        const pageState={ ...(modulesConfig[page]||{}), [moduleId]:input.checked };
+        modulesConfig={ ...modulesConfig, [page]:pageState };
+        modulesConfig=savePageModulesConfig(modulesConfig);
+        defaults=getDefaultPageModules();
+        render();
+        toast(`${input.checked?'Đã hiển thị':'Đã ẩn'} khối "${label}".`, 'success');
+      });
+    });
+  };
+
+  pageSelect.addEventListener('change',render);
+
+  resetPageBtn?.addEventListener('click',async evt=>{
+    evt.preventDefault();
+    const page=pageSelect.value;
+    if(!page) return;
+    if(!await confirmAction('Khôi phục trang này về cấu hình mặc định?')) return;
+    modulesConfig={ ...modulesConfig, [page]:{ ...(defaults[page]||{}) } };
+    modulesConfig=savePageModulesConfig(modulesConfig);
+    defaults=getDefaultPageModules();
+    render();
+    toast('Đã khôi phục trang về mặc định.', 'success');
   });
-  refreshSyncEndpointField(getSyncConfig().endpoint);
+
+  resetAllBtn?.addEventListener('click',async evt=>{
+    evt.preventDefault();
+    if(!await confirmAction('Khôi phục toàn bộ trang về mặc định?')) return;
+    modulesConfig=savePageModulesConfig(getDefaultPageModules());
+    defaults=getDefaultPageModules();
+    render();
+    toast('Đã khôi phục tất cả trang về mặc định.', 'success');
+  });
+
+  window.addEventListener('klc:modules-updated',evt=>{
+    modulesConfig=evt.detail||getPageModulesConfig();
+    defaults=getDefaultPageModules();
+    render();
+  });
+
+  render();
+}
+
+function setupSectionNavigation(){
+  const sections=Array.from(document.querySelectorAll('[data-system-section]')).filter(section=>!section.classList.contains('hidden'));
+  if(!sections.length){
+    desktopSectionNav?.classList.add('hidden');
+    mobileSectionNav?.classList.add('hidden');
+    return;
+  }
+  const entries=sections.map(section=>{
+    if(!section.id){
+      section.id=`section-${section.dataset.systemSection||Math.random().toString(36).slice(2)}`;
+    }
+    return {
+      id:section.id,
+      label:section.dataset.sectionTitle||section.id,
+      element:section
+    };
+  });
+  if(desktopSectionNav){
+    desktopSectionNav.innerHTML=entries.map(entry=>`<a href="#${entry.id}" data-target="${entry.id}">${entry.label}</a>`).join('');
+  }
+  if(mobileSectionNav){
+    mobileSectionNav.innerHTML=entries.map(entry=>`<button type="button" data-target="${entry.id}">${entry.label}</button>`).join('');
+  }
+  const handleNavClick=id=>{
+    const target=document.getElementById(id);
+    if(target){
+      target.scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+  };
+  desktopSectionNav?.querySelectorAll('a').forEach(anchor=>{
+    anchor.addEventListener('click',evt=>{
+      evt.preventDefault();
+      handleNavClick(anchor.dataset.target);
+    });
+  });
+  mobileSectionNav?.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click',evt=>{
+      evt.preventDefault();
+      handleNavClick(btn.dataset.target);
+    });
+  });
+  const setActive=id=>{
+    desktopSectionNav?.querySelectorAll('a').forEach(anchor=>anchor.classList.toggle('active',anchor.dataset.target===id));
+    mobileSectionNav?.querySelectorAll('button').forEach(btn=>btn.classList.toggle('active',btn.dataset.target===id));
+  };
+  if(entries.length){
+    setActive(entries[0].id);
+  }
+  const observer=new IntersectionObserver(obsEntries=>{
+    obsEntries.forEach(entry=>{
+      if(entry.isIntersecting){
+        setActive(entry.target.id);
+      }
+    });
+  },{ rootMargin:'-45% 0px -45% 0px' });
+  entries.forEach(entry=>observer.observe(entry.element));
 }
 
 function formatDateTime(value){

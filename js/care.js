@@ -11,8 +11,11 @@ import {
 import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
 import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
+import { applyPageModules, watchPageModules } from './core/modules.js';
 
 const user = initApp('care');
+applyPageModules('care');
+watchPageModules('care');
 let careRecords = readCollection('care');
 let customers = readCollection('customers');
 let staffList = getStaff();
@@ -25,6 +28,22 @@ const searchInput = document.getElementById('care-search');
 const ratingRadios = document.querySelectorAll('input[name="careRating"]');
 const ratingReason = document.getElementById('rating-reason-row');
 const timelineContainer = document.getElementById('care-activity');
+const detailModal = document.getElementById('care-detail');
+const customerUpdateSection = document.getElementById('care-customer-update');
+const customerUpdateEmpty = document.getElementById('care-update-empty');
+const customerUpdateForm = document.getElementById('care-update-form');
+const customerUpdateName = document.getElementById('care-update-name');
+const customerUpdateAddress = document.getElementById('care-update-address');
+const customerUpdateInstallment = document.getElementById('care-update-installment');
+const customerUpdatePurchased = document.getElementById('care-update-purchased');
+const customerUpdatePurchasedFields = document.getElementById('care-update-purchased-fields');
+const customerUpdateModel = document.getElementById('care-update-model');
+const customerUpdatePrice = document.getElementById('care-update-price');
+const customerUpdateNotes = document.getElementById('care-update-notes');
+const customerUpdateSave = document.getElementById('care-update-save');
+const customerUpdateCancel = document.getElementById('care-update-cancel');
+
+let activeDetailId = '';
 
 applyRolePermissions();
 renderCareTable(careRecords);
@@ -36,12 +55,24 @@ subscribeCollection('care', data => {
   careRecords = data;
   renderCareTable(careRecords);
   renderUnifiedTimeline();
+  if(activeDetailId){
+    const record = careRecords.find(item => item.id === activeDetailId);
+    if(record){
+      populateCustomerUpdate(record);
+    }
+  }
 });
 
 subscribeCollection('customers', data => {
   customers = data;
   setupFormOptions();
   renderUnifiedTimeline();
+  if(activeDetailId){
+    const record = careRecords.find(item => item.id === activeDetailId);
+    if(record){
+      populateCustomerUpdate(record);
+    }
+  }
 });
 
 window.addEventListener('klc:staff-updated', evt => {
@@ -116,6 +147,16 @@ function setupEvents(){
       renderUnifiedTimeline();
     });
   }
+
+  customerUpdatePurchased?.addEventListener('change', toggleCustomerUpdatePurchasedFields);
+  customerUpdateForm?.addEventListener('submit', evt => {
+    evt.preventDefault();
+    handleCustomerUpdateSave();
+  });
+  customerUpdateCancel?.addEventListener('click', evt => {
+    evt.preventDefault();
+    resetCustomerUpdateForm();
+  });
 }
 
 function toggleRatingReason(){
@@ -124,6 +165,22 @@ function toggleRatingReason(){
 }
 
 toggleRatingReason();
+
+function toggleCustomerUpdatePurchasedFields(){
+  if(!customerUpdatePurchasedFields) return;
+  const visible = customerUpdatePurchased?.checked;
+  customerUpdatePurchasedFields.classList.toggle('hidden', !visible);
+}
+
+function resetCustomerUpdateForm(){
+  if(!customerUpdateForm) return;
+  const careId = customerUpdateForm.dataset.careId || activeDetailId;
+  if(!careId) return;
+  const record = careRecords.find(item => item.id === careId);
+  if(record){
+    populateCustomerUpdate(record);
+  }
+}
 
 function collectFormData(){
   const formData = new FormData(form);
@@ -198,6 +255,9 @@ function linkCareToCustomer(entry){
   const match = entry.customerId ? customers.find(c => c.id === entry.customerId)
                                  : findCustomerMatch(entry.phone, entry.name);
   if (!match) return;
+  if (!entry.customerId || entry.customerId !== match.id) {
+    updateItem('care', entry.id, record => ({ ...record, customerId: match.id }));
+  }
   updateItem('customers', match.id, record => {
     const meta = record.meta && typeof record.meta === 'object' ? record.meta : {};
     const history = Array.isArray(meta.history) ? meta.history.slice() : [];
@@ -218,6 +278,133 @@ function linkCareToCustomer(entry){
       }
     };
   });
+}
+
+function populateCustomerUpdate(record){
+  if(!customerUpdateSection || !customerUpdateForm) return;
+  activeDetailId = record.id;
+  customerUpdateForm.dataset.careId = record.id;
+  const match = record.customerId ? customers.find(c => c.id === record.customerId)
+    : findCustomerMatch(record.phone, record.name);
+  if(match){
+    customerUpdateForm.dataset.customerId = match.id;
+    customerUpdateForm.classList.remove('hidden');
+    customerUpdateEmpty?.classList.add('hidden');
+    if(customerUpdateName){
+      const phoneLabel = match.phone ? ` – ${match.phone}` : '';
+      customerUpdateName.textContent = `${match.name || 'Khách hàng'}${phoneLabel}`;
+    }
+    if(customerUpdateAddress) customerUpdateAddress.value = match.address || '';
+    if(customerUpdateInstallment) customerUpdateInstallment.value = match.installment || '';
+    if(customerUpdatePurchased) customerUpdatePurchased.checked = !!match.purchased;
+    if(customerUpdateModel) customerUpdateModel.value = match.purchasedModel || '';
+    if(customerUpdatePrice) customerUpdatePrice.value = match.purchasedPrice || '';
+    if(customerUpdateNotes) customerUpdateNotes.value = match.notes || '';
+    toggleCustomerUpdatePurchasedFields();
+  }else{
+    customerUpdateForm.dataset.customerId = '';
+    customerUpdateForm.classList.add('hidden');
+    customerUpdateEmpty?.classList.remove('hidden');
+  }
+}
+
+function handleCustomerUpdateSave(){
+  if(!customerUpdateForm) return;
+  if(!ensurePermission(user,'write')) return;
+  const customerId = customerUpdateForm.dataset.customerId;
+  if(!customerId){
+    toast('Không tìm thấy khách hàng để cập nhật.','error');
+    return;
+  }
+  const address = customerUpdateAddress?.value.trim() || '';
+  const installment = customerUpdateInstallment?.value.trim() || '';
+  const purchased = !!customerUpdatePurchased?.checked;
+  const purchasedModel = customerUpdateModel?.value.trim() || '';
+  const purchasedPrice = customerUpdatePrice?.value.trim() || '';
+  const noteInput = customerUpdateNotes?.value.trim() || '';
+  const now = new Date().toISOString();
+
+  showLoading('Đang cập nhật hồ sơ khách hàng…');
+  setTimeout(() => {
+    updateItem('customers', customerId, record => {
+      const next = { ...record };
+      next.address = address;
+      next.installment = installment;
+      next.purchased = purchased;
+      next.purchasedModel = purchased ? purchasedModel : '';
+      next.purchasedPrice = purchased ? purchasedPrice : '';
+      if(noteInput){
+        next.notes = noteInput;
+      }else if(record.notes){
+        next.notes = record.notes;
+      }
+
+      const meta = record.meta && typeof record.meta === 'object' ? { ...record.meta } : {};
+      const history = Array.isArray(meta.history) ? meta.history.slice() : [];
+      const detailParts = [];
+      const staffLabel = user.name || user.username || 'CSKH';
+      detailParts.push(`Nhân viên: ${staffLabel}`);
+      if(address !== record.address){
+        detailParts.push(`Địa chỉ: ${address || 'chưa cập nhật'}`);
+      }
+      if(installment !== (record.installment || '')){
+        detailParts.push('Điều chỉnh thông tin trả góp/hẹn.');
+      }
+      if(purchased !== !!record.purchased){
+        detailParts.push(purchased ? 'Đánh dấu khách đã mua.' : 'Hủy đánh dấu khách đã mua.');
+      }
+      if(purchased && (purchasedModel || purchasedPrice)){
+        detailParts.push(`Sản phẩm: ${purchasedModel || 'Không rõ'}${purchasedPrice ? ` – ${purchasedPrice}` : ''}`);
+      }
+      if(noteInput){
+        detailParts.push(`Ghi chú: ${noteInput}`);
+      }
+      if(purchased && !record.purchased){
+        history.unshift({
+          id: generateId('history'),
+          type: 'status',
+          status: 'purchased',
+          title: 'Khách đã mua',
+          description: noteInput || 'Đánh dấu khách đã hoàn tất mua hàng.',
+          at: now
+        });
+      }
+      history.unshift({
+        id: generateId('history'),
+        type: 'note',
+        title: 'Cập nhật từ CSKH',
+        description: noteInput || 'Điều chỉnh hồ sơ khách từ màn hình CSKH.',
+        detail: detailParts.join(' '),
+        at: now
+      });
+      meta.history = history;
+      const statuses = meta.statuses && typeof meta.statuses === 'object' ? { ...meta.statuses } : {};
+      if(purchased){
+        statuses.purchased = {
+          at: now,
+          note: noteInput || 'Đánh dấu khách đã mua từ CSKH.',
+          staff: user.name || user.username,
+          model: purchasedModel,
+          price: purchasedPrice
+        };
+      }else{
+        delete statuses.purchased;
+      }
+      meta.statuses = statuses;
+      next.meta = meta;
+      return next;
+    });
+
+    hideLoading();
+    toast('Đã cập nhật hồ sơ khách hàng.','success');
+    customers = readCollection('customers');
+    const careId = customerUpdateForm.dataset.careId || activeDetailId;
+    const refreshed = careRecords.find(item => item.id === careId);
+    if(refreshed){
+      populateCustomerUpdate(refreshed);
+    }
+    renderUnifiedTimeline();
+  }, 350);
 }
 
 function formatDateTime(value){
@@ -300,8 +487,10 @@ function renderUnifiedTimeline(){
 
 function getHistoryBadge(entry){
   if (entry.type === 'status' && entry.status) {
-    const label = { appointment:'Hẹn', decline:'Từ chối', elsewhere:'Mua nơi khác' }[entry.status] || 'Trạng thái';
-    const variant = entry.status === 'decline' || entry.status === 'elsewhere' ? 'badge-danger' : 'badge-info';
+    const label = { appointment:'Hẹn', decline:'Từ chối', elsewhere:'Mua nơi khác', purchased:'Đã mua' }[entry.status] || 'Trạng thái';
+    const variant = entry.status === 'decline' || entry.status === 'elsewhere'
+      ? 'badge-danger'
+      : (entry.status === 'purchased' ? 'badge-success' : 'badge-info');
     return `<span class="badge ${variant}">${label}</span>`;
   }
   if (entry.type === 'note') {
@@ -313,24 +502,27 @@ function getHistoryBadge(entry){
 
 function showCareDetail(id){
   const record = careRecords.find(item => item.id === id);
-  const modal = document.getElementById('care-detail');
-  if (!record || !modal) return;
-  modal.querySelector('[data-field="name"]').innerText = record.name;
-  modal.querySelector('[data-field="phone"]').innerText = record.phone;
-  modal.querySelector('[data-field="date"]').innerText = formatDate(record.date);
-  modal.querySelector('[data-field="staff"]').innerText = record.staff;
-  modal.querySelector('[data-field="channel"]').innerText = record.channel;
-  modal.querySelector('[data-field="content"]').innerText = record.content || '-';
-  modal.querySelector('[data-field="feedback"]').innerText = record.feedback || '-';
-  modal.querySelector('[data-field="note"]').innerText = record.note || '-';
-  modal.querySelector('[data-field="rating"]').innerText = record.ratingLabel;
-  modal.querySelector('[data-field="reason"]').innerText = record.rating === 'lost' ? (record.ratingReason || '-') : '-';
-  modal.classList.remove('hidden');
+  if (!record || !detailModal) return;
+  detailModal.querySelector('[data-field="name"]').innerText = record.name;
+  detailModal.querySelector('[data-field="phone"]').innerText = record.phone;
+  detailModal.querySelector('[data-field="date"]').innerText = formatDate(record.date);
+  detailModal.querySelector('[data-field="staff"]').innerText = record.staff;
+  detailModal.querySelector('[data-field="channel"]').innerText = record.channel;
+  detailModal.querySelector('[data-field="content"]').innerText = record.content || '-';
+  detailModal.querySelector('[data-field="feedback"]').innerText = record.feedback || '-';
+  detailModal.querySelector('[data-field="note"]').innerText = record.note || '-';
+  detailModal.querySelector('[data-field="rating"]').innerText = record.ratingLabel;
+  detailModal.querySelector('[data-field="reason"]').innerText = record.rating === 'lost' ? (record.ratingReason || '-') : '-';
+  populateCustomerUpdate(record);
+  detailModal.classList.remove('hidden');
 }
 
 const closeModal = document.getElementById('care-detail-close');
 if (closeModal){
-  closeModal.addEventListener('click',()=>document.getElementById('care-detail').classList.add('hidden'));
+  closeModal.addEventListener('click',()=>{
+    detailModal?.classList.add('hidden');
+    activeDetailId = '';
+  });
 }
 
 function formatDate(value){
