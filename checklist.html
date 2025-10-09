@@ -3,12 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+codex/fix-issues-in-checklist-page-tqo0oa
+  <title>KLC Bến Lức - Hệ thống quản trị nội bộ</title>
+
   <title>CheckList công việc - KLC Bến Lức</title>
+ main
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+ codex/fix-issues-in-checklist-page-tqo0oa
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
+
+ main
   <script type="module" src="app.js" defer></script>
 </head>
 <body data-default-page="checklist" data-single-page="checklist">
@@ -17,6 +28,20 @@
     <p id="loader-message">Đang xử lý...</p>
   </div>
 
+ codex/fix-issues-in-checklist-page-tqo0oa
+  <div id="migration-banner" class="migration-banner hidden">
+    <div>
+      <strong>Phát hiện dữ liệu cũ trên thiết bị này.</strong>
+      <p>Bạn có thể di chuyển toàn bộ dữ liệu lên hệ thống đám mây để đồng bộ đa thiết bị.</p>
+    </div>
+    <div class="actions">
+      <button id="migration-run" class="primary">Di chuyển lên cloud</button>
+      <button id="migration-dismiss" class="ghost">Bỏ qua</button>
+    </div>
+  </div>
+
+
+ main
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
@@ -27,11 +52,19 @@
         </div>
       </div>
       <nav>
+ codex/fix-issues-in-checklist-page-tqo0oa
+        <button class="nav-link active" data-target="dashboard">Trang chủ</button>
+        <button class="nav-link" data-target="customers">Khách hàng</button>
+        <button class="nav-link" data-target="care">CSKH</button>
+        <button class="nav-link" data-target="service">Bảo hành &amp; Bảo dưỡng</button>
+        <button class="nav-link" data-target="checklist">CheckList công việc</button>
+
         <button class="nav-link" data-target="dashboard">Trang chủ</button>
         <button class="nav-link" data-target="customers">Khách hàng</button>
         <button class="nav-link" data-target="care">CSKH</button>
         <button class="nav-link" data-target="service">Bảo hành &amp; Bảo dưỡng</button>
         <button class="nav-link active" data-target="checklist">CheckList công việc</button>
+ main
         <button class="nav-link" data-target="inventory">Tồn kho</button>
         <button class="nav-link" data-target="finance">Thu &amp; Chi</button>
         <button class="nav-link" data-target="settings">Tùy chỉnh</button>
@@ -47,8 +80,13 @@
           <img src="assets/logo.svg" alt="Logo KLC" class="login-logo" />
           <h2>Đăng nhập hệ thống</h2>
           <form id="login-form">
+ codex/fix-issues-in-checklist-page-tqo0oa
+            <label>Email
+              <input type="email" id="login-email" required autocomplete="username" />
+
             <label>Tài khoản
               <input type="text" id="login-username" required autocomplete="username" />
+ main
             </label>
             <label>Mật khẩu
               <input type="password" id="login-password" required autocomplete="current-password" />
@@ -66,10 +104,44 @@
         </div>
       </section>
 
+ codex/fix-issues-in-checklist-page-tqo0oa
+      <section id="seed-admin-card" class="card hidden">
+        <div class="login-card">
+          <img src="assets/logo.svg" alt="Logo KLC" class="login-logo" />
+          <h2>Tạo quản trị viên đầu tiên</h2>
+          <p>Hệ thống chưa có tài khoản quản trị. Hãy tạo mới để bắt đầu sử dụng.</p>
+          <form id="seed-admin-form">
+            <label>Email quản trị
+              <input type="email" name="email" required />
+            </label>
+            <label>Mật khẩu
+              <input type="password" name="password" minlength="8" required />
+            </label>
+            <label>Họ và tên
+              <input type="text" name="fullName" required />
+            </label>
+            <button type="submit" class="primary w-100">Tạo quản trị viên</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="dashboard" class="page active">
+        <header class="page-header">
+          <h2>Trang chủ</h2>
+          <p>Thống kê tổng quan các hoạt động</p>
+          <div class="layout-controls">
+            <label class="checkbox inline">
+              <input type="checkbox" id="layout-edit-toggle" />
+              <span>Chế độ chỉnh bố cục</span>
+            </label>
+            <button id="layout-reset" class="ghost small">Khôi phục mặc định</button>
+          </div>
+
       <section id="dashboard" class="page">
         <header class="page-header">
           <h2>Trang chủ</h2>
           <p>Thống kê tổng quan các hoạt động</p>
+ main
         </header>
         <div class="grid dashboard-grid" id="dashboard-widgets">
           <article class="card widget" data-widget="customers">
@@ -586,9 +658,12 @@
           </div>
         </div>
       </section>
+ codex/fix-issues-in-checklist-page-tqo0oa
+
  codex/fix-issues-in-checklist-page-tahi62
 
 
+main
 main
       <section id="inventory" class="page">
         <header class="page-header">
@@ -782,7 +857,10 @@ main
             </table>
           </div>
         </div>
+ codex/fix-issues-in-checklist-page-tqo0oa
+
  codex/fix-issues-in-checklist-page-tahi62
+ main
         <div class="card">
           <header class="section-header">
             <h3>Yêu cầu phê duyệt</h3>
@@ -803,6 +881,19 @@ main
             <tbody></tbody>
           </table>
         </div>
+ codex/fix-issues-in-checklist-page-tqo0oa
+        <div class="card">
+          <header>
+            <h3>Sao lưu &amp; Google Drive</h3>
+          </header>
+          <p class="muted-text">Sao lưu snapshot dữ liệu vào Google Drive thông qua Apps Script đã cấu hình trong <code>config.js</code>.</p>
+          <div class="backup-actions">
+            <button id="backup-export" class="primary">Xuất sao lưu</button>
+            <button id="backup-latest" class="secondary">Xem bản mới nhất</button>
+          </div>
+          <p id="backup-status" class="backup-status">Chưa thực hiện sao lưu.</p>
+        </div>
+
 
 
  main
@@ -885,6 +976,7 @@ main
             <tbody></tbody>
           </table>
         </div>
+ main
  main
       </section>
     </main>
