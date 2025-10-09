@@ -19,7 +19,7 @@
     <div class="flex-1 min-h-screen flex flex-col">
       <header id="app-topbar" class="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b"></header>
       <main class="flex-1 p-4 md:p-6 space-y-6">
-        <section class="card p-5 space-y-4">
+        <section class="card p-5 space-y-4" data-module-page="care" data-module-id="form">
           <div class="section-title">Ghi nhận chăm sóc khách hàng</div>
           <p class="text-sm text-slate-500">Lưu lại lịch sử tương tác với khách để tiện theo dõi. Nhân viên có thể nhập dữ liệu và gửi yêu cầu xóa khi cần.</p>
           <p id="care-staff-view" class="hidden text-sm text-amber-600 font-semibold">Bạn đang đăng nhập với quyền nhân viên: có thể cập nhật CSKH, khi xóa vui lòng giải thích rõ để quản trị viên duyệt.</p>
@@ -100,7 +100,7 @@
           </div>
         </section>
 
-        <section class="space-y-4">
+        <section class="space-y-4" data-module-page="care" data-module-id="table">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div class="section-title">Danh sách chăm sóc khách hàng</div>
             <input id="care-search" class="search-input w-full md:w-80" placeholder="Tìm theo tên, SĐT, nhân viên, trạng thái">
@@ -129,7 +129,7 @@
         </section>
 
         <!-- Giữ lại phần Dòng thời gian -->
-        <section class="card p-5 space-y-4">
+        <section class="card p-5 space-y-4" data-module-page="care" data-module-id="timeline">
           <div>
             <div class="section-title">Dòng thời gian khách hàng & CSKH</div>
             <p class="text-sm text-slate-500">Tổng hợp hoạt động tạo khách hàng, chăm sóc và cập nhật trạng thái từ tất cả các phân hệ.</p>
@@ -157,6 +157,47 @@
       <div class="text-sm text-slate-600"><span class="font-semibold">Nội dung:</span> <span data-field="content"></span></div>
       <div class="text-sm text-slate-600"><span class="font-semibold">Phản hồi:</span> <span data-field="feedback"></span></div>
       <div class="text-sm text-slate-600"><span class="font-semibold">Ghi chú:</span> <span data-field="note"></span></div>
+    </div>
+
+    <div class="separator"></div>
+
+    <div id="care-customer-update" class="space-y-3 text-sm">
+      <div class="font-semibold text-brand-blue">Cập nhật khách hàng</div>
+      <p class="text-slate-500">Điều chỉnh nhanh hồ sơ khách liên quan ngay tại màn hình CSKH. Thay đổi sẽ áp dụng cho toàn bộ thiết bị đang đồng bộ.</p>
+      <div id="care-update-empty" class="text-xs text-amber-600 hidden">Chưa tìm thấy khách hàng phù hợp trong danh sách Khách hàng. Hãy thêm khách trước khi cập nhật.</div>
+      <form id="care-update-form" class="grid grid-cols-1 md:grid-cols-2 gap-3 hidden">
+        <div class="md:col-span-2 font-semibold text-slate-600">Khách: <span id="care-update-name" class="text-brand-blue"></span></div>
+        <label class="flex flex-col">
+          <span class="text-xs text-slate-500">Địa chỉ</span>
+          <input type="text" id="care-update-address" class="input-brand" placeholder="Cập nhật địa chỉ khách">
+        </label>
+        <label class="flex flex-col">
+          <span class="text-xs text-slate-500">Thông tin trả góp / hẹn</span>
+          <input type="text" id="care-update-installment" class="input-brand" placeholder="VD: Hẹn mua cuối tuần">
+        </label>
+        <label class="inline-flex items-center gap-3 md:col-span-2">
+          <input type="checkbox" id="care-update-purchased" class="h-4 w-4">
+          <span class="text-xs text-slate-500 font-semibold">Đánh dấu khách đã mua</span>
+        </label>
+        <div id="care-update-purchased-fields" class="grid grid-cols-1 md:grid-cols-2 gap-3 md:col-span-2 hidden">
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Mẫu ghế đã mua</span>
+            <input type="text" id="care-update-model" class="input-brand" placeholder="Ví dụ: KLC Luxury 2024">
+          </label>
+          <label class="flex flex-col">
+            <span class="text-xs text-slate-500">Giá trị đơn hàng</span>
+            <input type="text" id="care-update-price" class="input-brand" placeholder="VD: 36.900.000đ">
+          </label>
+        </div>
+        <label class="flex flex-col md:col-span-2">
+          <span class="text-xs text-slate-500">Ghi chú bổ sung</span>
+          <textarea id="care-update-notes" class="input-brand" rows="3" placeholder="Thông tin bổ sung sẽ được lưu vào lịch sử khách hàng."></textarea>
+        </label>
+        <div class="flex gap-3 md:col-span-2">
+          <button id="care-update-save" class="btn-brand px-5 py-2" type="submit">Lưu cập nhật</button>
+          <button id="care-update-cancel" class="px-5 py-2 rounded-xl border border-slate-300 text-slate-600" type="button">Khôi phục dữ liệu</button>
+        </div>
+      </form>
     </div>
   </div>
 

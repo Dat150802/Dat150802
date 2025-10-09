@@ -10,8 +10,11 @@ import {
 import { showLoading, hideLoading, toast, bindSearch, confirmAction } from './core/ui.js';
 import { ensurePermission } from './core/auth.js';
 import { getPendingDeletionIds, submitDeletionRequest, resolvePendingByRecord } from './core/deletion.js';
+import { applyPageModules, watchPageModules } from './core/modules.js';
 
 const user = initApp('customers');
+applyPageModules('customers');
+watchPageModules('customers');
 let customers = readCollection('customers');
 let careRecords = readCollection('care');
 const processedMeta = new Set();
@@ -301,6 +304,13 @@ function renderStatusFlags(meta,record){
       <div class="text-xs text-slate-500">Khách đã mua nơi khác</div>
       <div class="font-semibold text-slate-600">${formatDate(statuses.elsewhere.at)}</div>
       ${statuses.elsewhere.note ? `<div class="text-xs text-slate-500 mt-1">${statuses.elsewhere.note}</div>` : ''}
+    </div>`);
+  }
+  if (statuses.purchased){
+    items.push(`<div class="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200">
+      <div class="text-xs text-slate-500">Khách đã mua</div>
+      <div class="font-semibold text-brand-blue">${formatDate(statuses.purchased.at)}</div>
+      ${statuses.purchased.note ? `<div class="text-xs text-slate-500 mt-1">${statuses.purchased.note}</div>` : ''}
     </div>`);
   }
   if (!items.length){

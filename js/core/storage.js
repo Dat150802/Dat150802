@@ -1,3 +1,15 @@
+import {
+  initDriveClient,
+  ensureDriveFile,
+  downloadDriveFile,
+  uploadDriveFile,
+  driveSignOut,
+  setDriveConfig,
+  getDriveStatus as getInternalDriveStatus,
+  subscribeDriveStatus,
+  exportDriveFile
+} from './drive.js';
+
 // ========================
 // KLC Storage – Unified
 // ========================
@@ -81,17 +93,59 @@ const DEFAULT_BRANDING = {
 
 const DEFAULT_STAFF = ['Đạt', 'Huỳnh'];
 
+const DEFAULT_DRIVE_CONFIG = {
+  apiKey: '',
+  clientId: '',
+  fileId: '',
+  folderId: '1Khqq8amrAJ1qrLCRXVAnqN4M0vuPM8PO',
+  fileName: 'klc-database.json'
+};
+
+const DEFAULT_PAGE_MODULES = {
+  customers: {
+    overview: true,
+    pending: true,
+    list: true,
+    timeline: true
+  },
+  care: {
+    form: true,
+    table: true,
+    timeline: true
+  },
+  service: {
+    intake: true,
+    lists: true
+  },
+  inventory: {
+    intake: true,
+    history: true,
+    summary: true
+  },
+  finance: {
+    intake: true,
+    history: true,
+    summary: true
+  },
+  checklist: {
+    intake: true,
+    list: true
+  }
+};
+
 // =========== Đồng bộ từ xa (tùy chọn) ===========
 const SYNC_CONFIG_KEY = 'klc_sync_config_v1';
 const DEFAULT_SYNC_ENDPOINT = 'https://jsonstorage.net/api/items/klc-ben-luc-database';
 const DEFAULT_SYNC_CONFIG = {
   enabled: true,
+  provider: 'endpoint',
   endpoint: DEFAULT_SYNC_ENDPOINT,
   method: 'PUT',
   apiKey: '',
   authScheme: 'Bearer',
   headers: [],
-  pollInterval: 15000
+  pollInterval: 15000,
+  googleDrive: { ...DEFAULT_DRIVE_CONFIG }
 };
 
 let syncConfig = null;
@@ -103,10 +157,23 @@ let syncPendingUpload = false;
 let syncServiceStarted = false;
 const syncStatus = {
   enabled: false,
+  provider: 'endpoint',
   lastPush: 0,
   lastPull: 0,
-  lastError: ''
+  lastError: '',
+  drive: {
+    ready: false,
+    signedIn: false,
+    fileId: '',
+    profile: null,
+    error: ''
+  }
 };
+
+subscribeDriveStatus(status => {
+  syncStatus.drive = { ...status };
+  emitSyncStatus();
+});
 
 // ========= Layout mặc định cho Dashboard =========
 const DEFAULT_LAYOUT = [
@@ -167,7 +234,8 @@ function buildDefaultState() {
       { username: 'nhanvien', password: '123456', name: 'Nhân viên CSKH', role: 'staff' }
     ],
     branding: { ...DEFAULT_BRANDING },
-    staff: [...DEFAULT_STAFF]
+    staff: [...DEFAULT_STAFF],
+    pageModules: clonePageModules(DEFAULT_PAGE_MODULES)
   };
 }
 
@@ -180,6 +248,24 @@ function cloneLayout(layout) {
 
 function clone(value) {
   return value ? JSON.parse(JSON.stringify(value)) : value;
+}
+
+function clonePageModules(source) {
+  const result = {};
+  Object.entries(source || {}).forEach(([page, modules]) => {
+    result[page] = { ...modules };
+  });
+  return result;
+}
+
+function normalizePageModules(modules) {
+  const base = clonePageModules(DEFAULT_PAGE_MODULES);
+  if (modules && typeof modules === 'object') {
+    Object.entries(modules).forEach(([page, config]) => {
+      base[page] = { ...base[page], ...(config || {}) };
+    });
+  }
+  return base;
 }
 
 // ----- Headers helper (sync) -----
@@ -215,25 +301,54 @@ function cloneHeaders(headers) {
 }
 
 // ----- Sync config -----
+function normalizeSyncConfig(config) {
+  const normalized = {
+    ...DEFAULT_SYNC_CONFIG,
+    ...config,
+    headers: normalizeHeaders(config?.headers)
+  };
+  normalized.provider = normalized.provider || 'endpoint';
+  normalized.googleDrive = {
+    ...DEFAULT_DRIVE_CONFIG,
+    ...(config?.googleDrive || {})
+  };
+  if (!normalized.endpoint) normalized.endpoint = DEFAULT_SYNC_ENDPOINT;
+  setDriveConfig(normalized.googleDrive);
+  return normalized;
+}
+
+function isDriveProvider(config) {
+  return (config?.provider || 'endpoint') === 'googleDrive';
+}
+
+function persistDriveFileId(fileId) {
+  if (!fileId) return;
+  const current = getInternalSyncConfig();
+  if (current.googleDrive.fileId === fileId) return;
+  const next = {
+    ...current,
+    googleDrive: {
+      ...current.googleDrive,
+      fileId
+    }
+  };
+  syncConfig = normalizeSyncConfig(next);
+  saveSyncConfigToStorage();
+}
+
 function loadSyncConfig() {
   if (syncConfig) return syncConfig;
   try {
     const raw = storageGet(SYNC_CONFIG_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      syncConfig = {
-        ...DEFAULT_SYNC_CONFIG,
-        ...parsed,
-        headers: normalizeHeaders(parsed.headers)
-      };
-      if (!syncConfig.endpoint) syncConfig.endpoint = DEFAULT_SYNC_ENDPOINT;
+      syncConfig = normalizeSyncConfig(parsed);
     } else {
-      syncConfig = { ...DEFAULT_SYNC_CONFIG };
+      syncConfig = normalizeSyncConfig(DEFAULT_SYNC_CONFIG);
     }
   } catch (err) {
-    syncConfig = { ...DEFAULT_SYNC_CONFIG };
+    syncConfig = normalizeSyncConfig(DEFAULT_SYNC_CONFIG);
   }
-  if (!syncConfig.endpoint) syncConfig.endpoint = DEFAULT_SYNC_ENDPOINT;
   updateSyncEnabledFlag();
   return syncConfig;
 }
@@ -242,15 +357,27 @@ function getInternalSyncConfig() {
 }
 function saveSyncConfigToStorage() {
   try {
-    const payload = { ...getInternalSyncConfig(), headers: cloneHeaders(syncConfig.headers) };
+    const current = getInternalSyncConfig();
+    const payload = {
+      ...current,
+      headers: cloneHeaders(current.headers),
+      googleDrive: { ...current.googleDrive }
+    };
     storageSet(SYNC_CONFIG_KEY, JSON.stringify(payload));
   } catch (err) {
     console.warn('Không thể lưu cấu hình đồng bộ', err);
   }
 }
 function updateSyncEnabledFlag() {
-  const config = syncConfig || DEFAULT_SYNC_CONFIG;
-  syncStatus.enabled = !!(config.enabled && config.endpoint && typeof fetch === 'function');
+  const config = getInternalSyncConfig();
+  syncStatus.provider = config.provider || 'endpoint';
+  if (syncStatus.provider === 'googleDrive') {
+    const driveCfg = config.googleDrive || DEFAULT_DRIVE_CONFIG;
+    syncStatus.enabled = !!(config.enabled && driveCfg.apiKey && driveCfg.clientId);
+    syncStatus.drive = { ...getInternalDriveStatus() };
+  } else {
+    syncStatus.enabled = !!(config.enabled && config.endpoint && typeof fetch === 'function');
+  }
   emitSyncStatus();
 }
 function emitSyncStatus() {
@@ -300,6 +427,7 @@ function loadState() {
   if (raw) {
     try {
       stateCache = JSON.parse(raw);
+      stateCache.pageModules = normalizePageModules(stateCache.pageModules);
       lastVersion = Number(stateCache?.version) || Number(storageGet(VERSION_KEY) || '0') || 0;
       startSyncService();
       return stateCache;
@@ -309,6 +437,7 @@ function loadState() {
   }
   const state = buildDefaultState();
   migrateLegacyData(state);
+  state.pageModules = normalizePageModules(state.pageModules);
   persistState(state, { silent: true, skipSync: true });
   stateCache = state;
   lastVersion = Number(state.version) || Date.now();
@@ -317,6 +446,7 @@ function loadState() {
 }
 
 function persistState(state, { silent = false, skipSync = false, preserveVersion = false } = {}) {
+  state.pageModules = normalizePageModules(state.pageModules);
   if (!preserveVersion) {
     state.version = Date.now();
   } else {
@@ -338,7 +468,8 @@ function persistState(state, { silent = false, skipSync = false, preserveVersion
 // ----- Sync timers -----
 function scheduleSyncUpload(delay = 600) {
   const config = getInternalSyncConfig();
-  if (!config.enabled || !config.endpoint || typeof fetch !== 'function') return;
+  if (!config.enabled) return;
+  if (!isDriveProvider(config) && (!config.endpoint || typeof fetch !== 'function')) return;
   if (syncUploadTimer) return;
   syncUploadTimer = setTimeout(() => {
     syncUploadTimer = null;
@@ -353,7 +484,7 @@ function queueRemotePull(initial = false, delay = 0) {
   syncPullTimer = setTimeout(async () => {
     await pullFromRemote({ initial });
     const cfg = getInternalSyncConfig();
-    if (cfg.enabled && cfg.endpoint && typeof fetch === 'function') {
+    if (cfg.enabled && (isDriveProvider(cfg) || (cfg.endpoint && typeof fetch === 'function'))) {
       queueRemotePull(false, cfg.pollInterval || 15000);
     }
   }, Math.max(0, delay));
@@ -370,7 +501,11 @@ function restartSyncTimers() {
   }
   syncPendingUpload = false;
   const config = getInternalSyncConfig();
-  if (!config.enabled || !config.endpoint || typeof fetch !== 'function') {
+  if (!config.enabled) {
+    syncServiceStarted = false;
+    return;
+  }
+  if (!isDriveProvider(config) && (!config.endpoint || typeof fetch !== 'function')) {
     syncServiceStarted = false;
     return;
   }
@@ -381,7 +516,11 @@ function restartSyncTimers() {
 // ----- Push/Pull -----
 async function pushToRemote({ manual = false } = {}) {
   const config = getInternalSyncConfig();
-  if (!config.enabled || !config.endpoint || typeof fetch !== 'function') return false;
+  if (!config.enabled) return false;
+  if (isDriveProvider(config)) {
+    return pushToGoogleDrive(config, { manual });
+  }
+  if (!config.endpoint || typeof fetch !== 'function') return false;
   if (syncPushInFlight) {
     if (manual) throw new Error('Đang có phiên đồng bộ khác đang xử lý.');
     syncPendingUpload = true;
@@ -418,9 +557,54 @@ async function pushToRemote({ manual = false } = {}) {
   }
 }
 
+async function pushToGoogleDrive(config, { manual = false } = {}) {
+  const driveCfg = config.googleDrive || DEFAULT_DRIVE_CONFIG;
+  if (!driveCfg.apiKey || !driveCfg.clientId) {
+    if (manual) throw new Error('Chưa cấu hình Google Drive API.');
+    return false;
+  }
+  if (syncPushInFlight) {
+    if (manual) throw new Error('Đang có phiên đồng bộ khác đang xử lý.');
+    syncPendingUpload = true;
+    return false;
+  }
+  syncPushInFlight = true;
+  syncPendingUpload = false;
+  syncStatus.lastError = '';
+  emitSyncStatus();
+  try {
+    setDriveConfig(driveCfg);
+    await initDriveClient(driveCfg);
+    const { fileId } = await ensureDriveFile(driveCfg);
+    if (!fileId) throw new Error('Không thể tìm thấy file đồng bộ trên Google Drive.');
+    persistDriveFileId(fileId);
+    const payload = clone(loadState());
+    await uploadDriveFile(fileId, payload, driveCfg);
+    syncStatus.lastPush = Date.now();
+    emitSyncStatus();
+    return true;
+  } catch (err) {
+    syncStatus.lastError = err.message || 'Không thể đồng bộ Google Drive.';
+    emitSyncStatus();
+    if (manual) throw err;
+    console.warn('Không thể đồng bộ Google Drive', err);
+    return false;
+  } finally {
+    syncPushInFlight = false;
+    if (syncPendingUpload) {
+      syncPendingUpload = false;
+      scheduleSyncUpload(800);
+    }
+  }
+}
+
 async function pullFromRemote({ initial = false, manual = false } = {}) {
   const config = getInternalSyncConfig();
-  if (!config.enabled || !config.endpoint || typeof fetch !== 'function') return false;
+  if (!config.enabled) return false;
+  if (isDriveProvider(config)) {
+    return pullFromGoogleDrive({ initial, manual });
+  }
+  if (!config.endpoint || typeof fetch !== 'function') return false;
   if (syncPullInFlight) {
     if (manual) throw new Error('Đang tải dữ liệu mới từ máy chủ.');
     return false;
@@ -470,6 +654,56 @@ async function pullFromRemote({ initial = false, manual = false } = {}) {
   return false;
 }
 
+async function pullFromGoogleDrive({ initial = false, manual = false } = {}) {
+  const config = getInternalSyncConfig();
+  const driveCfg = config.googleDrive || DEFAULT_DRIVE_CONFIG;
+  if (!driveCfg.apiKey || !driveCfg.clientId) {
+    if (manual) throw new Error('Chưa cấu hình Google Drive API.');
+    return false;
+  }
+  if (syncPullInFlight) {
+    if (manual) throw new Error('Đang tải dữ liệu mới từ Google Drive.');
+    return false;
+  }
+  syncPullInFlight = true;
+  syncStatus.lastError = '';
+  emitSyncStatus();
+  try {
+    setDriveConfig(driveCfg);
+    await initDriveClient(driveCfg);
+    const { fileId } = await ensureDriveFile(driveCfg);
+    if (!fileId) {
+      if (initial) persistDriveFileId('');
+      return false;
+    }
+    persistDriveFileId(fileId);
+    const remote = await downloadDriveFile(fileId);
+    if (remote && typeof remote === 'object') {
+      const normalized = normalizeRemoteState(remote);
+      const remoteVersion = Number(normalized.version) || 0;
+      if (!lastVersion || remoteVersion > lastVersion) {
+        persistState(normalized, { silent: true, skipSync: true, preserveVersion: true });
+        stateCache = normalized;
+        lastVersion = remoteVersion;
+        notifyAll();
+        broadcastSync(remoteVersion);
+      }
+      syncStatus.lastPull = Date.now();
+      emitSyncStatus();
+      return true;
+    }
+    if (initial) scheduleSyncUpload(300);
+  } catch (err) {
+    syncStatus.lastError = err.message || 'Không thể tải dữ liệu.';
+    emitSyncStatus();
+    if (manual) throw err;
+    console.warn('Không thể đồng bộ Google Drive', err);
+  } finally {
+    syncPullInFlight = false;
+  }
+  return false;
+}
+
 function normalizeRemoteState(remote) {
   const base = buildDefaultState();
   const normalized = {
@@ -482,7 +716,8 @@ function normalizeRemoteState(remote) {
     branding: {
       ...base.branding,
       ...(remote.branding || {})
-    }
+    },
+    pageModules: normalizePageModules(remote.pageModules)
   };
   if (!Array.isArray(normalized.users)) normalized.users = base.users;
   if (!Array.isArray(normalized.staff)) normalized.staff = base.staff;
@@ -559,6 +794,7 @@ function migrateLegacyData(target) {
     storageRemove(LEGACY_USERS_KEY);
     storageRemove(LEGACY_BRANDING_KEY);
   }
+  target.pageModules = normalizePageModules(target.pageModules);
 }
 
 // ----- Pub/Sub & cross-tab notify -----
@@ -709,17 +945,26 @@ export function saveStaff(list) {
 // ======= Sync public API =======
 export function getSyncConfig() {
   const config = getInternalSyncConfig();
-  return { ...config, headers: cloneHeaders(config.headers) };
+  return {
+    ...config,
+    headers: cloneHeaders(config.headers),
+    googleDrive: { ...config.googleDrive }
+  };
 }
 
 export function saveSyncConfig(config) {
-  const endpoint = (config.endpoint || '').trim() || DEFAULT_SYNC_ENDPOINT;
-  syncConfig = {
-    ...DEFAULT_SYNC_CONFIG,
+  const current = getInternalSyncConfig();
+  const merged = {
+    ...current,
     ...config,
-    endpoint,
-    headers: normalizeHeaders(config.headers)
+    endpoint: (config.endpoint || '').trim() || DEFAULT_SYNC_ENDPOINT,
+    headers: config.headers !== undefined ? config.headers : current.headers,
+    googleDrive: {
+      ...current.googleDrive,
+      ...(config.googleDrive || {})
+    }
   };
+  syncConfig = normalizeSyncConfig(merged);
   saveSyncConfigToStorage();
   updateSyncEnabledFlag();
   restartSyncTimers();
@@ -730,9 +975,64 @@ export function getSyncStatus() {
   return { ...syncStatus };
 }
 
+export function getDriveStatus() {
+  return getInternalDriveStatus();
+}
+
+export async function connectDrive({ ensureFile = true } = {}) {
+  const config = getInternalSyncConfig();
+  if (!isDriveProvider(config)) throw new Error('Chế độ đồng bộ hiện tại không sử dụng Google Drive.');
+  const driveCfg = config.googleDrive || DEFAULT_DRIVE_CONFIG;
+  if (!driveCfg.apiKey || !driveCfg.clientId) throw new Error('Chưa cấu hình Google Drive.');
+  setDriveConfig(driveCfg);
+  await initDriveClient(driveCfg);
+  let ensured = null;
+  if (ensureFile) {
+    ensured = await ensureDriveFile(driveCfg);
+    if (ensured?.fileId) {
+      persistDriveFileId(ensured.fileId);
+    }
+  }
+  updateSyncEnabledFlag();
+  return { status: getInternalDriveStatus(), ensured };
+}
+
+export async function disconnectDrive() {
+  await driveSignOut();
+  syncStatus.drive = { ...getInternalDriveStatus() };
+  emitSyncStatus();
+  return syncStatus.drive;
+}
+
+export async function downloadDriveBackup() {
+  const config = getInternalSyncConfig();
+  if (!isDriveProvider(config)) throw new Error('Chế độ đồng bộ hiện tại không phải Google Drive.');
+  const fileId = config.googleDrive?.fileId;
+  if (!fileId) throw new Error('Chưa tìm thấy file sao lưu trên Google Drive.');
+  setDriveConfig(config.googleDrive);
+  const blob = await exportDriveFile(fileId);
+  return { blob, fileName: config.googleDrive.fileName || 'klc-database.json' };
+}
+
 export async function testSyncConnection() {
   const config = getInternalSyncConfig();
-  if (!config.enabled || !config.endpoint) throw new Error('Chưa bật đồng bộ hoặc chưa nhập địa chỉ máy chủ.');
+  if (!config.enabled) throw new Error('Đồng bộ đang tắt.');
+  if (isDriveProvider(config)) {
+    const driveCfg = config.googleDrive || DEFAULT_DRIVE_CONFIG;
+    if (!driveCfg.apiKey || !driveCfg.clientId) {
+      throw new Error('Chưa cấu hình Google Drive API Key hoặc Client ID.');
+    }
+    try {
+      setDriveConfig(driveCfg);
+      const { fileId } = await ensureDriveFile(driveCfg);
+      if (!fileId) throw new Error('Không thể tạo hoặc truy cập file Google Drive.');
+      persistDriveFileId(fileId);
+      return true;
+    } catch (err) {
+      throw new Error(err.message || 'Không thể kết nối Google Drive.');
+    }
+  }
+  if (!config.endpoint) throw new Error('Chưa nhập địa chỉ máy chủ.');
   if (typeof fetch !== 'function') throw new Error('Trình duyệt hiện tại không hỗ trợ đồng bộ từ xa.');
   try {
     const response = await fetch(config.endpoint, {
@@ -750,7 +1050,15 @@ export async function testSyncConnection() {
 
 export async function triggerSyncNow(mode = 'both') {
   const config = getInternalSyncConfig();
-  if (!config.enabled || !config.endpoint) throw new Error('Đồng bộ chưa được bật.');
+  if (!config.enabled) throw new Error('Đồng bộ chưa được bật.');
+  if (isDriveProvider(config)) {
+    const driveCfg = config.googleDrive || DEFAULT_DRIVE_CONFIG;
+    if (!driveCfg.apiKey || !driveCfg.clientId) {
+      throw new Error('Chưa cấu hình Google Drive.');
+    }
+  } else if (!config.endpoint) {
+    throw new Error('Chưa nhập địa chỉ máy chủ.');
+  }
   if (mode === 'pull' || mode === 'both') {
     await pullFromRemote({ manual: true });
   }
@@ -802,4 +1110,43 @@ function normalizeLayout(layout) {
       if (item.html) normalized.html = item.html;
       return normalized;
     });
+}
+
+// ======= Page module visibility =======
+export function getDefaultPageModules() {
+  return clonePageModules(DEFAULT_PAGE_MODULES);
+}
+
+export function getPageModulesConfig() {
+  const state = loadState();
+  state.pageModules = normalizePageModules(state.pageModules);
+  return clonePageModules(state.pageModules);
+}
+
+export function savePageModulesConfig(config) {
+  const state = loadState();
+  const merged = normalizePageModules({
+    ...state.pageModules,
+    ...(config || {})
+  });
+  state.pageModules = merged;
+  persistState(state);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('klc:modules-updated', { detail: getPageModulesConfig() }));
+  }
+  return getPageModulesConfig();
+}
+
+export function setModuleVisibility(page, moduleId, visible) {
+  if (!page || !moduleId) return getPageModulesConfig();
+  const state = loadState();
+  const modules = normalizePageModules(state.pageModules);
+  if (!modules[page]) modules[page] = {};
+  modules[page][moduleId] = visible;
+  state.pageModules = modules;
+  persistState(state);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('klc:modules-updated', { detail: { page, modules: getPageModulesConfig() } }));
+  }
+  return getPageModulesConfig();
 }
