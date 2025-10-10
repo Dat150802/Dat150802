@@ -1,6 +1,0 @@
-# Chuẩn hoá line endings
-* text=auto eol=lf
-
-# Với file build/static, nếu có, ưu tiên của remote (tránh merge noise)
-dist/* merge=ours
-build/* merge=ours
