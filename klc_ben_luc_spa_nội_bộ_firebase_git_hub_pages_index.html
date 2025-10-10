@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KLC Bến Lức – Hệ thống nội bộ</title>
+  <link rel="icon" href="logo.png" />
+  <!-- Tone thương hiệu: xanh #0F52BA (xanh KLC), vàng #F6C90E (gold), nền xanh đậm #0E6B6B -->
+  <style>
+    :root{
+      --brand-primary:#0F52BA; /* xanh */
+      --brand-secondary:#F6C90E; /* vàng */
+      --brand-teal:#0E6B6B; /* nền header/sidebar */
+      --brand-ink:#0f172a; /* chữ */
+      --muted:#f1f5f9; /* nền block */
+      --card:#ffffff;
+      --danger:#ef4444; --success:#16a34a; --warn:#f59e0b;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font:500 16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial;color:var(--brand-ink);background:#f7fafc}
+    .app{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+    .sidebar{background:var(--brand-teal);color:#fff;display:flex;flex-direction:column}
+    .brand{display:flex;align-items:center;gap:12px;padding:18px;border-bottom:1px solid rgba(255,255,255,.15)}
+    .brand img{width:44px;height:44px;border-radius:10px;border:2px solid #e4e4e4;background:#fff}
+    .brand h1{font-size:18px;margin:0;font-weight:800;letter-spacing:.2px}
+    .nav{padding:10px}
+    .nav button{width:100%;text-align:left;padding:10px 12px;border:0;background:transparent;color:#fff;border-radius:10px;margin:4px 0;display:flex;justify-content:space-between;align-items:center}
+    .nav button.active,.nav button:hover{background:rgba(255,255,255,.12)}
+    .nav .badge{background:var(--brand-secondary);color:#111;padding:2px 8px;border-radius:12px;font-size:12px}
+    .admin-tools{margin-top:auto;padding:12px;border-top:1px solid rgba(255,255,255,.15)}
+    .admin-tools small{opacity:.8}
+
+    .content{padding:18px}
+    .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+    .card{background:var(--card);border-radius:14px;box-shadow:0 8px 24px rgba(2,6,23,.06);padding:16px;margin-bottom:12px}
+    .grid{display:grid;gap:12px}
+    .grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+    @media (max-width:960px){.app{grid-template-columns:1fr}.sidebar{position:fixed;z-index:50;inset:0 55% 0 0;transform:translateX(-110%);transition:.25s}.sidebar.show{transform:none}.content{padding:12px} .hide-mobile{display:none}}
+
+    h2{font-size:20px;margin:0 0 10px}
+    label{font-size:13px;color:#475569}
+    input,select,textarea{width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#fff}
+    textarea{min-height:90px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    .btn{padding:10px 14px;border:0;border-radius:12px;background:var(--brand-primary);color:#fff;cursor:pointer}
+    .btn.secondary{background:var(--brand-secondary);color:#111}
+    .btn.ghost{background:#e2e8f0;color:#111}
+    .btn.danger{background:var(--danger)}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .hr{height:1px;background:#e5e7eb;margin:12px 0}
+    .table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    .table th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;text-align:left;padding:0 10px}
+    .table td{background:#fff;padding:12px 10px;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb}
+    .table tr td:first-child{border-left:1px solid #e5e7eb;border-radius:10px 0 0 10px}
+    .table tr td:last-child{border-right:1px solid #e5e7eb;border-radius:0 10px 10px 0}
+
+    /* Loading overlay */
+    .overlay{position:fixed;inset:0;background:rgba(15,23,42,.35);backdrop-filter:blur(1px);display:none;align-items:center;justify-content:center;z-index:100}
+    .overlay.show{display:flex}
+    .spinner{width:58px;height:58px;border:6px solid #fff;border-top-color:var(--brand-primary);border-radius:50%;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .overlay .text{margin-top:10px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.35);font-weight:700;text-align:center}
+
+    /* Auth */
+    .auth{max-width:900px;margin:22px auto;display:grid;grid-template-columns:420px 1fr;gap:18px}
+    .auth .left{background:#fff;border-radius:16px;padding:18px;box-shadow:0 8px 24px rgba(2,6,23,.06)}
+    .auth .right{display:flex;align-items:center;justify-content:center}
+    @media (max-width:960px){.auth{grid-template-columns:1fr}}
+    .muted{color:#64748b}
+    .chip{display:inline-block;background:#eef2ff;color:#3730a3;padding:4px 10px;border-radius:999px;font-size:12px;margin-right:6px}
+
+    .hide{display:none}
+  </style>
+  <!-- Firebase v10 (modular) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<div id="overlay" class="overlay"><div>
+  <div class="spinner" aria-hidden="true"></div>
+  <div class="text">Đang tải…</div></div>
+</div>
+
+<!-- =========== LOGIN =========== -->
+<section id="auth" class="auth">
+  <div class="left">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <img src="logo.png" alt="KLC" style="width:44px;height:44px;border-radius:10px;border:2px solid #e4e4e4;background:#fff"/>
+      <div>
+        <h2 style="margin:0">KLC Bến Lức – Đăng nhập</h2>
+        <small class="muted">Duy trì đăng nhập trên thiết bị này</small>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Tài khoản</label>
+        <input id="email" placeholder="admin hoặc nhanvien" />
+      </div>
+      <div>
+        <label>Mật khẩu</label>
+        <input id="password" type="password" placeholder="••••••" />
+      </div>
+    </div>
+    <div style="margin:10px 0; display:flex;align-items:center;gap:10px">
+      <input id="remember" type="checkbox" /> <label for="remember">Nhớ mật khẩu / duy trì đăng nhập</label>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="btnLogin">Đăng nhập</button>
+      <button class="btn ghost" id="btnFillAdmin">Điền sẵn Admin</button>
+      <button class="btn ghost" id="btnFillStaff">Điền sẵn Nhân viên</button>
+    </div>
+    <div class="muted">Tài khoản mẫu: admin/123456 (quản trị), nhanvien/1234 (nhân viên)</div>
+    <div class="hr"></div>
+    <div>
+      <span class="chip">Đồng bộ thời gian thực</span>
+      <span class="chip">Sao lưu Google Sheets (tùy chọn)</span>
+      <span class="chip">Vai trò: Admin / Staff</span>
+    </div>
+  </div>
+  <div class="right">
+    <img src="logo.png" alt="KLC" style="width:220px;border-radius:18px;border:4px solid #e5e7eb;background:#fff"/>
+  </div>
+</section>
+
+<!-- =========== APP LAYOUT =========== -->
+<div id="app" class="app hide">
+  <aside id="sidebar" class="sidebar">
+    <div class="brand">
+      <img src="logo.png" alt="KLC"/>
+      <div>
+        <h1>KLC Bến Lức</h1>
+        <small id="userRole">Đang xác định vai trò…</small>
+      </div>
+    </div>
+    <div class="nav">
+      <button data-view="home" class="active">1. Trang chủ</button>
+      <button data-view="khachhang">2. Khách hàng</button>
+      <button data-view="cskh">3. CSKH</button>
+      <button data-view="baohanh">4. Bảo hành / Bảo dưỡng</button>
+      <button data-view="checklist">5. CheckList</button>
+      <button data-view="tonkho">6. Tồn kho</button>
+      <button data-view="thuchi">7. Thu & Chi</button>
+      <button data-view="thietlap">8. Thiết lập hệ thống <span class="badge">Admin</span></button>
+    </div>
+    <div class="admin-tools">
+      <button class="btn secondary" id="btnToggleSidebar" style="width:100%">Ẩn/Hiện menu</button>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <button class="btn ghost" id="btnLogout" style="flex:1">Đăng xuất</button>
+      </div>
+      <small>Phiên bản: v1.0 • Realtime Firestore</small>
+    </div>
+  </aside>
+
+  <main class="content">
+    <!-- 1. HOME -->
+    <section id="view-home" class="view card">
+      <h2>Tổng quan hoạt động</h2>
+      <div class="row-3">
+        <div class="card"><label>Chọn mốc</label>
+          <div class="row">
+            <input type="date" id="fromHome"/><input type="date" id="toHome"/>
+          </div>
+          <div class="toolbar"><button class="btn" id="btnReloadHome">Tải báo cáo</button>
+            <input id="searchHome" placeholder="Tìm nhanh (VD: KY20, bảo hành, huỳnh…)"/>
+          </div>
+        </div>
+        <div class="card"><strong id="kpiKhach">0</strong><div class="muted">Khách mới</div></div>
+        <div class="card"><strong id="kpiCSKH">0</strong><div class="muted">Lượt CSKH</div></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 style="margin:0 0 8px">Biểu đồ (demo)</h3>
+          <canvas id="chart1" height="140"></canvas>
+        </div>
+        <div class="card">
+          <h3 style="margin:0 0 8px">Nguồn khách</h3>
+          <div id="homeSources"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. KHÁCH HÀNG -->
+    <section id="view-khachhang" class="view card hide">
+      <h2>Khách hàng</h2>
+      <div class="row-3">
+        <div><label>Ngày</label><input type="date" id="kh-ngay"></div>
+        <div><label>Tên</label><input id="kh-ten" placeholder="Nguyễn Văn A"></div>
+        <div><label>Điện thoại</label><input id="kh-sdt" placeholder="09xxxxxxxx"></div>
+      </div>
+      <div class="row-3">
+        <div><label>Địa chỉ</label><input id="kh-diachi" placeholder="81 Nguyễn Hữu Thọ, Bến Lức"></div>
+        <div><label>Nguồn khách</label>
+          <select id="kh-nguon">
+            <option value="walkin">Ghé ngang cửa hàng</option>
+            <option value="online">Khách online</option>
+            <option value="referral_old">Khách cũ giới thiệu</option>
+            <option value="repurchase">Khách cũ mua lại</option>
+            <option value="staff_friends">Người quen nhân viên</option>
+            <option value="other">Khác</option>
+          </select>
+        </div>
+        <div id="kh-nguon-phu-wrap" class="hide"><label>Chi tiết nguồn</label><input id="kh-nguon-phu" placeholder="VD: từ bài viết X / khách cũ Y / nhân viên Z…"></div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Trạng thái mua</label>
+          <select id="kh-trangthai">
+            <option value="chua">Chưa mua</option>
+            <option value="da">Đã mua</option>
+          </select>
+        </div>
+        <div id="kh-da-wrap" class="hide">
+          <label>Mẫu ghế + giá tiền</label><input id="kh-da" placeholder="VD: KY20 – 29.900.000" />
+        </div>
+      </div>
+      <div id="kh-chua-wrap" class=""><label>Đã tư vấn: mẫu/giá/trả góp (có thể nhập nhiều, cách nhau dấu ;)</label><textarea id="kh-chua"></textarea></div>
+      <div><label>Ghi chú</label><textarea id="kh-ghichu"></textarea></div>
+      <div class="toolbar"><button class="btn" id="btnKhLuu">Lưu</button><button class="btn danger" id="btnKhXoa">Xóa form</button></div>
+      <div class="hr"></div>
+      <div class="toolbar"><input id="kh-search" placeholder="Tìm khách… tên/điện thoại/mẫu ghế" /></div>
+      <table class="table" id="kh-list"><thead><tr><th>Ngày</th><th>Tên</th><th>Điện thoại</th><th>Nguồn</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <!-- 3. CSKH -->
+    <section id="view-cskh" class="view card hide">
+      <h2>CSKH</h2>
+      <div class="row-3">
+        <div><label>Ngày</label><input type="date" id="cs-ngay"></div>
+        <div><label>Tên (gợi ý)</label><input list="kh-datalist" id="cs-ten" placeholder="chọn từ danh sách"/></div>
+        <div><label>Điện thoại (gợi ý)</label><input list="khphone-datalist" id="cs-sdt" /></div>
+      </div>
+      <datalist id="kh-datalist"></datalist>
+      <datalist id="khphone-datalist"></datalist>
+      <div class="row-3">
+        <div><label>Địa chỉ</label><input id="cs-diachi"></div>
+        <div><label>Nhân viên CSKH</label>
+          <select id="cs-nhanvien"></select>
+        </div>
+        <div><label>Hình thức</label>
+          <select id="cs-hinhthuc">
+            <option>Gọi điện</option><option>Nhắn tin</option><option>Gửi tin hàng loạt</option><option>Gọi + nhắn</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div><label>Nội dung CSKH</label><textarea id="cs-noidung"></textarea></div>
+        <div><label>Phản hồi KH</label><textarea id="cs-phanhoi"></textarea></div>
+      </div>
+      <div>
+        <label>Đánh giá khách hàng</label>
+        <div class="toolbar">
+          <label><input type="radio" name="cs-danhgia" value="tiemnang" checked> Còn tiềm năng</label>
+          <label><input type="radio" name="cs-danhgia" value="nuoi"> Đang nuôi khách</label>
+          <label><input type="radio" name="cs-danhgia" value="henlen"> Đang hẹn lên</label>
+          <label><input type="radio" name="cs-danhgia" value="het"> Hết tiềm năng</label>
+          <input id="cs-lydo" class="hide" placeholder="Lý do hết tiềm năng"/>
+        </div>
+      </div>
+      <div class="toolbar"><button class="btn" id="btnCsLuu">Lưu</button><button class="btn danger" id="btnCsXoa">Xóa form</button></div>
+      <div class="hr"></div>
+      <div class="toolbar"><input id="cs-search" placeholder="Tìm trong danh sách CSKH"/></div>
+      <table class="table" id="cs-list"><thead><tr><th>Ngày</th><th>Tên</th><th>NV CSKH</th><th>Hình thức</th><th>Đánh giá</th><th>Thao tác</th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <!-- 4. BẢO HÀNH/BẢO DƯỠNG -->
+    <section id="view-baohanh" class="view card hide">
+      <h2>Bảo hành & Bảo dưỡng</h2>
+      <div class="toolbar">
+        <label><input type="radio" name="bh-type" value="baohanh" checked> Bảo hành</label>
+        <label><input type="radio" name="bh-type" value="baoduong"> Bảo dưỡng</label>
+      </div>
+      <div class="row-3">
+        <div><label>Ngày</label><input type="date" id="bh-ngay"></div>
+        <div><label>Tên</label><input id="bh-ten"></div>
+        <div><label>Điện thoại</label><input id="bh-sdt"></div>
+      </div>
+      <div class="row-3">
+        <div><label>Địa chỉ</label><input id="bh-diachi"></div>
+        <div><label>Mẫu ghế</label><input id="bh-mau"></div>
+        <div id="bh-tinhtrang-wrap"><label>Tình trạng (BH)</label><input id="bh-tinhtrang"></div>
+      </div>
+      <div><label>Yêu cầu thêm của khách</label><textarea id="bh-yeucau"></textarea></div>
+      <div class="toolbar"><button class="btn" id="btnBhLuu">Lưu</button><button class="btn danger" id="btnBhXoa">Xóa form</button></div>
+      <div class="hr"></div>
+      <div class="toolbar">
+        <select id="bh-filter">
+          <option value="all">Tất cả</option><option value="chua">Khách chưa hỗ trợ</option><option value="da">Khách đã hỗ trợ</option><option value="linhkien">Đã gửi linh kiện</option>
+        </select>
+        <input id="bh-search" placeholder="Tìm nhanh…"/>
+      </div>
+      <h3>Danh sách bảo hành</h3>
+      <table class="table" id="bh-list"><thead><tr><th>Ngày</th><th>Tên</th><th>Mẫu</th><th>Trạng thái</th><th>Ghi chú</th><th>Thao tác</th></tr></thead><tbody></tbody></table>
+      <h3>Danh sách bảo dưỡng</h3>
+      <table class="table" id="bd-list"><thead><tr><th>Ngày</th><th>Tên</th><th>Mẫu</th><th>Ghi chú</th><th>Thao tác</th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <!-- 5. CHECKLIST -->
+    <section id="view-checklist" class="view card hide">
+      <h2>CheckList Công việc</h2>
+      <div class="row-3">
+        <div><label>Ngày</label><input type="date" id="cl-ngay"></div>
+        <div><label>Nhân viên</label><select id="cl-nv"></select></div>
+        <div><label>Ca làm việc</label>
+          <select id="cl-ca">
+            <option value="sang">Ca sáng (8:00 - 16:00)</option>
+            <option value="chieu">Ca chiều (13:00 - 21:00)</option>
+            <option value="full">Ca full (8:00 - 21:00)</option>
+          </select>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Công việc theo giờ</h3>
+        <div id="cl-works"></div>
+        <div class="hr"></div>
+        <label>Tổng kết trong ngày</label>
+        <textarea id="cl-tongket"></textarea>
+        <div class="row">
+          <div><label>Chưa hoàn thành (lý do)</label><textarea id="cl-lydo"></textarea></div>
+          <div><label>Dự kiến khi nào xong</label><input id="cl-deadline" type="date"></div>
+        </div>
+        <div class="toolbar"><button class="btn" id="btnClLuu">Lưu</button><button class="btn danger" id="btnClXoa">Xóa form</button></div>
+      </div>
+      <div class="hr"></div>
+      <div class="toolbar"><input id="cl-search" placeholder="Tìm trong danh sách công việc"/></div>
+      <table class="table" id="cl-list"><thead><tr><th>Ngày</th><th>NV</th><th>Ca</th><th>Tổng kết</th><th>Thao tác</th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <!-- 6. TỒN KHO -->
+    <section id="view-tonkho" class="view card hide">
+      <h2>Tồn kho</h2>
+      <div class="row-3">
+        <div><label>Ngày</label><input type="date" id="tk-ngay"></div>
+        <div><label>Loại chứng từ</label>
+          <select id="tk-loai"><option value="nhap">Nhập</option><option value="xuat">Xuất</option></select>
+        </div>
+        <div><label>Ghi chú</label><input id="tk-ghichu"></div>
+      </div>
+      <div class="row-3">
+        <div><label>SKU / Mẫu</label><input id="tk-sku" placeholder="VD: KY20"></div>
+        <div><label>Số lượng</label><input id="tk-soluong" type="number" value="1"></div>
+        <div><label>Đơn vị</label><input id="tk-donvi" placeholder="cái, bộ…"/></div>
+      </div>
+      <div class="toolbar"><button class="btn" id="btnTkLuu">Lưu</button><button class="btn danger" id="btnTkXoa">Xóa form</button></div>
+      <div class="hr"></div>
+      <div class="toolbar"><input id="tk-search" placeholder="Tìm trong tồn kho"/></div>
+      <table class="table" id="tk-list"><thead><tr><th>Ngày</th><th>Loại</th><th>SKU</th><th>SL</th><th>Đơn vị</th><th>Ghi chú</th><th>Thao tác</th></tr></thead><tbody></tbody></table>
+      <div class="card"><h3 style="margin:0 0 8px">Bảng cân đối hằng ngày</h3><div id="tk-bang"></div></div>
+    </section>
+
+    <!-- 7. THU CHI -->
+    <section id="view-thuchi" class="view card hide">
+      <h2>Thu & Chi</h2>
+      <div class="row-3">
+        <div><label>Ngày</label><input type="date" id="tc-ngay"></div>
+        <div><label>Loại</label>
+          <select id="tc-loai"><option value="thu">Thu</option><option value="chi">Chi</option></select>
+        </div>
+        <div><label>Số tiền (VND)</label><input id="tc-sotien" type="number"></div>
+      </div>
+      <div class="row">
+        <div><label>Nội dung</label><input id="tc-noidung"></div>
+        <div><label>Lý do</label><input id="tc-lydo"></div>
+      </div>
+      <div class="toolbar"><button class="btn" id="btnTcLuu">Lưu</button><button class="btn danger" id="btnTcXoa">Xóa form</button></div>
+      <div class="hr"></div>
+      <div class="row-3">
+        <div><label>Chọn tháng</label><input type="month" id="tc-month"></div>
+        <div class="toolbar"><button class="btn" id="btnTcBaoCao">Tải báo cáo</button></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card"><h3 style="margin:0 0 8px">Danh sách thu</h3><table class="table" id="tc-list-thu"><thead><tr><th>Ngày</th><th>Nội dung</th><th>Số tiền</th></tr></thead><tbody></tbody></table></div>
+        <div class="card"><h3 style="margin:0 0 8px">Danh sách chi</h3><table class="table" id="tc-list-chi"><thead><tr><th>Ngày</th><th>Nội dung</th><th>Số tiền</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card"><h3 style="margin:0 0 8px">Tổng kết tháng</h3><div id="tc-tongket"></div></div>
+    </section>
+
+    <!-- 8. THIẾT LẬP (ADMIN) -->
+    <section id="view-thietlap" class="view card hide">
+      <h2>Thiết lập hệ thống</h2>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 style="margin:0 0 8px">Nhân sự</h3>
+          <div class="row">
+            <input id="set-nv-name" placeholder="Tên nhân viên"><button class="btn" id="btnAddNV">Thêm</button>
+          </div>
+          <ul id="set-nv-list"></ul>
+        </div>
+        <div class="card">
+          <h3 style="margin:0 0 8px">Giao diện</h3>
+          <div class="row">
+            <div><label>Màu chính</label><input id="set-color1" type="color" value="#0F52BA"></div>
+            <div><label>Màu phụ</label><input id="set-color2" type="color" value="#F6C90E"></div>
+          </div>
+          <div class="row">
+            <div><label>Logo</label><input id="set-logo" type="file" accept="image/*"></div>
+            <div><button class="btn" id="btnSaveTheme" style="margin-top:26px">Lưu giao diện</button></div>
+          </div>
+          <small class="muted">Admin có thể chỉnh sửa bố cục nhẹ (thêm/bớt nhân sự, đổi màu, đổi logo) không cần viết lệnh.</small>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ChartJS (nhẹ) cho 1 biểu đồ demo -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+// ===================== CONFIG =====================
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "",
+  appId: ""
+};
+const GOOGLE_SHEETS_WEBAPP = ""; // tuỳ chọn: Apps Script webhook để sao lưu
+
+// ===================== INIT =====================
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+// Duy trì đăng nhập cục bộ trên trình duyệt
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
+// Role lưu tại collection userProfiles/{uid} {role: 'admin'|'staff', name}
+let currentUser = null; let currentRole = 'staff';
+
+// ===== Helpers
+const $ = (id)=>document.getElementById(id);
+function showOverlay(txt='Đang tải…'){const o=$('overlay');o.classList.add('show');o.querySelector('.text').textContent=txt}
+function hideOverlay(){ $('overlay').classList.remove('show') }
+function fmt(n){return new Intl.NumberFormat('vi-VN').format(n)}
+function today(){return new Date().toISOString().slice(0,10)}
+function activeView(name){document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+  document.querySelectorAll('.view').forEach(v=>v.classList.add('hide')); $('view-'+name).classList.remove('hide');}
+
+// ===== Auth demo autofill
+$('btnFillAdmin').onclick=()=>{ $('email').value='admin'; $('password').value='123456' }
+$('btnFillStaff').onclick=()=>{ $('email').value='nhanvien'; $('password').value='1234' }
+
+$('btnLogin').onclick=async()=>{
+  showOverlay('Đang đăng nhập…');
+  try{
+    const emailRaw = $('email').value.trim();
+    const pass = $('password').value.trim();
+    // Cho phép tên tắt: admin/nhanvien => chuyển thành email thật
+    const email = emailRaw.includes('@')? emailRaw : `${emailRaw}@klc.local`;
+    let user;
+    try{ user = await auth.signInWithEmailAndPassword(email, pass); }
+    catch(e){
+      // Tự tạo user nếu chưa có (phù hợp GitHub Pages không có backend)
+      if(e.code==='auth/user-not-found'){
+        user = await auth.createUserWithEmailAndPassword(email, pass);
+        await db.collection('userProfiles').doc(user.user.uid).set({
+          name: emailRaw,
+          role: emailRaw==='admin'? 'admin':'staff'
+        });
+      } else throw e;
+    }
+    currentUser = user.user;
+    const prof = await db.collection('userProfiles').doc(currentUser.uid).get();
+    currentRole = prof.exists? (prof.data().role||'staff') : 'staff';
+    $('userRole').textContent = `Đăng nhập: ${prof.data()?.name||emailRaw} • Vai trò: ${currentRole.toUpperCase()}`;
+    if($('remember').checked){ localStorage.setItem('klcRemember','1'); }
+    $('auth').classList.add('hide'); $('app').classList.remove('hide');
+    initAppData();
+  }catch(err){ alert('Lỗi đăng nhập: '+err.message); }
+  hideOverlay();
+}
+
+$('btnLogout').onclick=async()=>{ showOverlay('Đăng xuất…'); await auth.signOut(); localStorage.removeItem('klcRemember'); location.reload(); }
+
+// Auto-login nếu đã từng đăng nhập và chọn nhớ
+auth.onAuthStateChanged(async(u)=>{
+  if(u && localStorage.getItem('klcRemember')==='1'){
+    currentUser=u; const prof=await db.collection('userProfiles').doc(u.uid).get(); currentRole=prof.exists?(prof.data().role||'staff'):'staff';
+    $('userRole').textContent = `Đăng nhập: ${prof.data()?.name||'Tài khoản'} • Vai trò: ${currentRole.toUpperCase()}`;
+    $('auth').classList.add('hide'); $('app').classList.remove('hide'); initAppData();
+  }
+});
+
+// ===== Sidebar navigation
+Array.from(document.querySelectorAll('.nav button')).forEach(b=>b.onclick=()=>{
+  const v=b.dataset.view; activeView(v);
+  if(v==='thietlap' && currentRole!=='admin'){ alert('Chỉ Admin truy cập mục này'); activeView('home'); }
+});
+$('btnToggleSidebar').onclick=()=>{ document.getElementById('sidebar').classList.toggle('show'); }
+
+// ======= DATA STRUCTURE =======
+// collections:
+// customers {date,name,phone,address,source,sourceNote,status,boughtInfo,advised,notes,createdBy}
+// care {date, customerId?, name, phone, address, staff, method, content, feedback, rating, reason, createdBy}
+// warranty {type:'baohanh'|'baoduong', date, name, phone, address, model, state, request, status:'chua'|'da'|'linhkien', parts?:string, partsDate?:string, notes}
+// checklist {date, staff, shift, works:[{time,task,done}], summary, reason, eta}
+// inventory {date, type:'nhap'|'xuat', sku, qty, unit, note}
+// finance {date, type:'thu'|'chi', amount, title, reason}
+// settings {employees:[], theme:{color1,color2,logoUrl}}
+
+// ======= INIT APP AFTER LOGIN =======
+async function initAppData(){
+  // Default values
+  ['kh','cs','bh','cl','tk','tc'].forEach(prefix=>{ const d=$(`${prefix}-ngay`); if(d) d.value=today(); });
+  // Load settings (employees, theme)
+  const setDoc = await db.collection('settings').doc('default').get();
+  let settings = setDoc.exists? setDoc.data() : {employees:['Đạt','Huỳnh'], theme:{color1:'#0F52BA', color2:'#F6C90E'}};
+  renderSettings(settings);
+  // Role-based UI
+  if(currentRole!=='admin'){
+    document.querySelector('[data-view="khachhang"]').disabled=false; // staff xem/ghi khách hàng được nếu muốn
+    document.querySelector('[data-view="thietlap"]').disabled=true;
+  }
+  // Realtime lists
+  bindCustomerRealtime();
+  bindCSKHRealtime();
+  bindWarrantyRealtime();
+  bindChecklistRealtime();
+  bindInventoryRealtime();
+  bindFinanceRealtime();
+  buildCheckListGrid();
+  buildHomeChart();
+}
+
+// ======= THEME & SETTINGS =======
+function renderSettings(s){
+  // employees
+  const selNV = $('cs-nhanvien'); selNV.innerHTML='';
+  const clNV = $('cl-nv'); clNV.innerHTML='';
+  (s.employees||[]).forEach(n=>{ const o1=new Option(n,n); selNV.add(o1); const o2=new Option(n,n); clNV.add(o2); });
+  // theme colors
+  document.documentElement.style.setProperty('--brand-primary', s.theme?.color1||'#0F52BA');
+  document.documentElement.style.setProperty('--brand-secondary', s.theme?.color2||'#F6C90E');
+  $('set-color1').value = s.theme?.color1||'#0F52BA'; $('set-color2').value=s.theme?.color2||'#F6C90E';
+}
+
+$('btnAddNV').onclick=async()=>{
+  if(currentRole!=='admin') return alert('Chỉ Admin');
+  const name=$('set-nv-name').value.trim(); if(!name) return;
+  showOverlay('Lưu nhân sự…');
+  const ref=db.collection('settings').doc('default');
+  await db.runTransaction(async(t)=>{
+    const snap=await t.get(ref); let s=snap.exists?snap.data():{employees:[], theme:{}}; if(!s.employees.includes(name)) s.employees.push(name); t.set(ref,s);
+  });
+  hideOverlay(); $('set-nv-name').value=''; const s= (await db.collection('settings').doc('default').get()).data(); renderSettings(s);
+}
+$('btnSaveTheme').onclick=async()=>{
+  if(currentRole!=='admin') return alert('Chỉ Admin');
+  const color1=$('set-color1').value, color2=$('set-color2').value; showOverlay('Lưu giao diện…');
+  await db.collection('settings').doc('default').set({theme:{color1,color2}}, {merge:true}); hideOverlay(); alert('Đã lưu.');
+}
+
+// ======= KHÁCH HÀNG =======
+$('kh-nguon').onchange=()=>{
+  const v=$('kh-nguon').value; const need=['online','referral_old','repurchase','staff_friends','other'].includes(v); $('kh-nguon-phu-wrap').classList.toggle('hide',!need);
+}
+$('kh-trangthai').onchange=()=>{
+  const v=$('kh-trangthai').value; $('kh-da-wrap').classList.toggle('hide', v!=='da'); $('kh-chua-wrap').classList.toggle('hide', v==='da');
+}
+$('btnKhLuu').onclick=async()=>{
+  const payload={date:$('kh-ngay').value||today(),name:$('kh-ten').value.trim(),phone:$('kh-sdt').value.trim(),address:$('kh-diachi').value.trim(),source:$('kh-nguon').value,sourceNote:$('kh-nguon-phu').value.trim(),status:$('kh-trangthai').value,boughtInfo:$('kh-da').value.trim(),advised:$('kh-chua').value.trim(),notes:$('kh-ghichu').value.trim(),createdBy:currentUser.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+  if(!payload.name){return alert('Nhập tên');}
+  showOverlay('Đang lưu khách hàng…');
+  await db.collection('customers').add(payload);
+  if(GOOGLE_SHEETS_WEBAPP){ fetch(GOOGLE_SHEETS_WEBAPP,{method:'POST',body:JSON.stringify({type:'customers',data:payload})}); }
+  hideOverlay(); clearKH();
+}
+$('btnKhXoa').onclick=()=>clearKH();
+function clearKH(){['ten','sdt','diachi','nguon-phu','da','chua','ghichu'].forEach(id=>{$('kh-'+id).value=''});}
+
+function bindCustomerRealtime(){
+  db.collection('customers').orderBy('createdAt','desc').onSnapshot(snap=>{
+    const tb=$('kh-list').querySelector('tbody'); tb.innerHTML='';
+    const names=[]; const phones=[];
+    snap.forEach(doc=>{const d=doc.data(); names.push(d.name); phones.push(d.phone);
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${d.date||''}</td><td>${d.name||''}</td><td>${d.phone||''}</td><td>${d.source||''}</td><td>${d.status==='da'?'ĐÃ MUA':'Chưa mua'}</td><td><button class='btn ghost' data-id='${doc.id}'>CSKH</button></td>`;
+      tb.appendChild(tr);
+    });
+    // datalist cho CSKH
+    $('kh-datalist').innerHTML=names.map(n=>`<option value="${n}">`).join('');
+    $('khphone-datalist').innerHTML=phones.map(n=>`<option value="${n}">`).join('');
+  });
+}
+$('kh-search').oninput=()=> filterTable('kh-list',$('kh-search').value);
+
+// ======= CSKH =======
+const radioDanhGia=()=> document.querySelector('input[name="cs-danhgia"]:checked').value;
+Array.from(document.querySelectorAll('input[name="cs-danhgia"]')).forEach(r=>r.onchange=()=>{$('cs-lydo').classList.toggle('hide', r.value!=='het');});
+$('btnCsLuu').onclick=async()=>{
+  const payload={date:$('cs-ngay').value||today(),name:$('cs-ten').value.trim(),phone:$('cs-sdt').value.trim(),address:$('cs-diachi').value.trim(),staff:$('cs-nhanvien').value,method:$('cs-hinhthuc').value,content:$('cs-noidung').value.trim(),feedback:$('cs-phanhoi').value.trim(),rating:radioDanhGia(),reason:$('cs-lydo').value.trim(),createdBy:currentUser.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+  if(!payload.name){return alert('Chọn/tìm khách');}
+  showOverlay('Lưu CSKH…'); await db.collection('care').add(payload);
+  if(GOOGLE_SHEETS_WEBAPP){ fetch(GOOGLE_SHEETS_WEBAPP,{method:'POST',body:JSON.stringify({type:'care',data:payload})}); }
+  hideOverlay(); clearCSKH();
+}
+$('btnCsXoa').onclick=()=>clearCSKH();
+function clearCSKH(){['ten','sdt','diachi','noidung','phanhoi','lydo'].forEach(i=>{$('cs-'+i).value=''});}
+function bindCSKHRealtime(){
+  db.collection('care').orderBy('createdAt','desc').onSnapshot(snap=>{
+    const tb=$('cs-list').querySelector('tbody'); tb.innerHTML='';
+    snap.forEach(doc=>{const d=doc.data();
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${d.date||''}</td><td>${d.name||''}</td><td>${d.staff||''}</td><td>${d.method||''}</td><td>${d.rating||''}</td><td><button class='btn ghost' data-id='${doc.id}'>Chi tiết</button></td>`;
+      tb.appendChild(tr);
+    });
+  });
+}
+$('cs-search').oninput=()=> filterTable('cs-list',$('cs-search').value);
+
+// ======= BẢO HÀNH / BẢO DƯỠNG =======
+function bhType(){return document.querySelector('input[name="bh-type"]:checked').value}
+Array.from(document.querySelectorAll('input[name="bh-type"]').forEach(r=>r.addEventListener('change',()=>{
+  const isBH = bhType()==='baohanh'; $('bh-tinhtrang-wrap').style.display = isBH?'block':'none';
+}));
+$('btnBhLuu').onclick=async()=>{
+  const payload={type:bhType(),date:$('bh-ngay').value||today(),name:$('bh-ten').value.trim(),phone:$('bh-sdt').value.trim(),address:$('bh-diachi').value.trim(),model:$('bh-mau').value.trim(),state:$('bh-tinhtrang').value.trim(),request:$('bh-yeucau').value.trim(),status:'chua',createdBy:currentUser.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+  if(!payload.name){return alert('Nhập tên');}
+  showOverlay('Lưu phiếu…'); await db.collection('warranty').add(payload);
+  hideOverlay(); clearBH();
+}
+function clearBH(){['ten','sdt','diachi','mau','tinhtrang','yeucau'].forEach(i=>{$('bh-'+i).value=''});}
+function bindWarrantyRealtime(){
+  db.collection('warranty').orderBy('createdAt','desc').onSnapshot(snap=>{
+    const bh=$('bh-list').querySelector('tbody'); const bd=$('bd-list').querySelector('tbody'); bh.innerHTML=''; bd.innerHTML='';
+    snap.forEach(doc=>{const d=doc.data();
+      const tr=document.createElement('tr');
+      const act=`<button class='btn ghost' onclick="updateWarranty('${doc.id}','da')">Đã hỗ trợ</button> <button class='btn ghost' onclick="updateWarranty('${doc.id}','linhkien')">Gửi linh kiện</button>`;
+      if(d.type==='baohanh'){
+        tr.innerHTML=`<td>${d.date||''}</td><td>${d.name||''}</td><td>${d.model||''}</td><td>${d.status||''}</td><td>${d.request||''}</td><td>${act}</td>`; bh.appendChild(tr);
+      }else{
+        tr.innerHTML=`<td>${d.date||''}</td><td>${d.name||''}</td><td>${d.model||''}</td><td>${d.request||''}</td><td>${act}</td>`; bd.appendChild(tr);
+      }
+    });
+  });
+}
+window.updateWarranty=async(id, status)=>{ showOverlay('Cập nhật…'); await db.collection('warranty').doc(id).set({status}, {merge:true}); hideOverlay(); }
+$('bh-search').oninput=()=>{ filterTable('bh-list',$('bh-search').value); filterTable('bd-list',$('bh-search').value); }
+
+// ======= CHECKLIST =======
+function buildCheckListGrid(){
+  const container=$('cl-works'); container.innerHTML='';
+  const blocks = {
+    'sang':['08:00','09:00','10:00','11:00','12:00','13:00'],
+    'chieu':['13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'],
+    'full':['08:00','10:00','12:00','14:00','16:00','18:00','20:00']
+  };
+  const ca=$('cl-ca').value; (blocks[ca]||[]).forEach(t=>{
+    const row=document.createElement('div'); row.className='row'; row.style.margin='6px 0';
+    row.innerHTML=`<input value='${t}' disabled><input placeholder='Công việc ${t}'><label><input type='checkbox'> Hoàn thành</label>`; container.appendChild(row);
+  });
+}
+$('cl-ca').onchange=buildCheckListGrid;
+$('btnClLuu').onclick=async()=>{
+  const works=[...$('cl-works').querySelectorAll('.row')].map(r=>({time:r.children[0].value,task:r.children[1].value,done:r.children[2].querySelector('input').checked}));
+  const payload={date:$('cl-ngay').value||today(),staff:$('cl-nv').value,shift:$('cl-ca').value,works,summary:$('cl-tongket').value,reason:$('cl-lydo').value,eta:$('cl-deadline').value,createdBy:currentUser.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+  showOverlay('Lưu checklist…'); await db.collection('checklist').add(payload); hideOverlay(); $('cl-tongket').value=''; $('cl-lydo').value='';
+}
+function bindChecklistRealtime(){
+  db.collection('checklist').orderBy('createdAt','desc').onSnapshot(snap=>{
+    const tb=$('cl-list').querySelector('tbody'); tb.innerHTML='';
+    snap.forEach(doc=>{const d=doc.data(); const tr=document.createElement('tr'); tr.innerHTML=`<td>${d.date}</td><td>${d.staff}</td><td>${d.shift}</td><td>${(d.summary||'').slice(0,40)}…</td><td><button class='btn ghost'>Xem</button></td>`; tb.appendChild(tr);});
+  });
+}
+$('cl-search').oninput=()=> filterTable('cl-list',$('cl-search').value);
+
+// ======= TỒN KHO =======
+$('btnTkLuu').onclick=async()=>{
+  const payload={date:$('tk-ngay').value||today(),type:$('tk-loai').value,sku:$('tk-sku').value.trim().toUpperCase(),qty:parseFloat($('tk-soluong').value||'1'),unit:$('tk-donvi').value.trim(),note:$('tk-ghichu').value.trim(),createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+  if(!payload.sku){return alert('Nhập SKU');}
+  showOverlay('Lưu chứng từ…'); await db.collection('inventory').add(payload); hideOverlay();
+}
+function bindInventoryRealtime(){
+  db.collection('inventory').orderBy('createdAt','desc').onSnapshot(snap=>{
+    const tb=$('tk-list').querySelector('tbody'); tb.innerHTML=''; const balance={};
+    snap.forEach(doc=>{const d=doc.data(); const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${d.date}</td><td>${d.type}</td><td>${d.sku}</td><td>${d.qty}</td><td>${d.unit}</td><td>${d.note||''}</td><td><button class='btn ghost'>Sửa</button></td>`; tb.appendChild(tr);
+      balance[d.sku]=(balance[d.sku]||0)+(d.type==='nhap'? d.qty : -d.qty);
+    });
+    const box=$('tk-bang'); box.innerHTML=''; Object.keys(balance).sort().forEach(sku=>{ const div=document.createElement('div'); div.textContent=`${sku}: ${balance[sku]}`; box.appendChild(div); })
+  });
+}
+$('tk-search').oninput=()=> filterTable('tk-list',$('tk-search').value);
+
+// ======= THU CHI =======
+$('btnTcLuu').onclick=async()=>{
+  const payload={date:$('tc-ngay').value||today(), type:$('tc-loai').value, amount:parseFloat($('tc-sotien').value||'0'), title:$('tc-noidung').value.trim(), reason:$('tc-lydo').value.trim(), createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+  if(!(payload.amount>0)) return alert('Nhập số tiền > 0');
+  showOverlay('Lưu thu/chi…'); await db.collection('finance').add(payload); hideOverlay();
+}
+function bindFinanceRealtime(){
+  db.collection('finance').orderBy('createdAt','desc').onSnapshot(snap=>{
+    const thu=$('tc-list-thu').querySelector('tbody'); const chi=$('tc-list-chi').querySelector('tbody'); thu.innerHTML=''; chi.innerHTML='';
+    snap.forEach(doc=>{const d=doc.data(); const tr=document.createElement('tr'); tr.innerHTML=`<td>${d.date}</td><td>${d.title}</td><td>${fmt(d.amount)}</td>`; (d.type==='thu'?thu:chi).appendChild(tr); });
+    buildFinanceMonth();
+  });
+}
+$('btnTcBaoCao').onclick=buildFinanceMonth;
+function buildFinanceMonth(){
+  const ym = $('tc-month').value || new Date().toISOString().slice(0,7);
+  const rowsThu=[...$('tc-list-thu').querySelectorAll('tbody tr')];
+  const rowsChi=[...$('tc-list-chi').querySelectorAll('tbody tr')];
+  const sum=(rows)=> rows.reduce((a,r)=>{const d=r.children[0].textContent; if(d.startsWith(ym)) a+=parseFloat(r.children[2].textContent.replaceAll('.','')); return a;},0);
+  const t=sum(rowsThu), c=sum(rowsChi); $('tc-tongket').innerHTML=`Tháng ${ym}: <strong>Thu ${fmt(t)}</strong> – <strong>Chi ${fmt(c)}</strong> → <strong>${fmt(t-c)}</strong>`;
+}
+
+// ======= HOME REPORT (demo) =======
+function buildHomeChart(){
+  const ctx=$('chart1'); if(!ctx) return; const data={labels:['T1','T2','T3','T4','T5','T6'], datasets:[{label:'Khách mới', data:[5,8,12,7,14,9]},{label:'Lượt CSKH', data:[9,11,13,10,16,12]}]};
+  new Chart(ctx, {type:'line', data});
+}
+
+// ======= UTILS =======
+function filterTable(tblId, q){q=q.toLowerCase(); const rows=document.querySelectorAll('#'+tblId+' tbody tr'); rows.forEach(r=>{r.style.display=[...r.children].some(td=>td.textContent.toLowerCase().includes(q))? '':'none';});}
+
+</script>
+</body>
+</html>
