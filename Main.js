@@ -9,12 +9,13 @@ import {
 
 // Dán firebaseConfig của bạn ở đây:
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID"
+ apiKey: "AIzaSyDkqaX1fCdO0xa9v4YUwd0VN3ZjnhyJhvI",
+  authDomain: "klc-ben-luc-crm.firebaseapp.com",
+  projectId: "klc-ben-luc-crm",
+  storageBucket: "klc-ben-luc-crm.firebasestorage.app",
+  messagingSenderId: "499089227125",
+  appId: "1:499089227125:web:a1854adad0026d82c0273c",
+  measurementId: "G-6GTP0HTMWY"
 };
 
 const app = initializeApp(firebaseConfig);
