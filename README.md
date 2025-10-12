@@ -1,3 +1,4 @@
+ codex/create-internal-website-for-klc-ben-luc-pen74o
 # KLC Bến Lức – Hướng dẫn triển khai nhanh
 
 Tài liệu này giải thích các bước tiếp theo sau khi đã tạo project Firebase `klc-ben-luc-crm` để trang nội bộ hoạt động đầy đủ và đồng bộ giữa các thiết bị.
@@ -60,3 +61,21 @@ Sau khi xác nhận mọi thứ chạy ổn, bạn nên siết luật lại, ví
 
 ---
 Nếu bạn gặp lỗi "permission denied" hoặc không thấy dữ liệu đồng bộ, hãy kiểm tra lại **Rules** và chắc chắn bạn đang mở đúng project Firebase `klc-ben-luc-crm` như trong hình chụp màn hình.
+
+## Hi there 👋
+
+<!--
+**Dat150802/Dat150802** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+
+Here are some ideas to get you started:
+
+- 🔭 I’m currently working on ...
+- 🌱 I’m currently learning ...
+- 👯 I’m looking to collaborate on ...
+- 🤔 I’m looking for help with ...
+- 💬 Ask me about ...
+- 📫 How to reach me: ...
+- 😄 Pronouns: ...
+- ⚡ Fun fact: ...
+-->
+ codex/build-internal-website-for-klc-ben-luc-b5jncf
