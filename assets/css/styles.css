@@ -299,6 +299,7 @@ textarea {
   z-index: 10;
 }
 
+ codex/create-internal-website-for-klc-ben-luc-ju2m25
 .connection-banner {
   margin: 0 2rem 1rem;
   padding: 0.85rem 1.2rem;
@@ -312,7 +313,10 @@ textarea {
 
 .connection-banner.warning {
   background: #fff4e5;
-  border-color: #ffd8a8;
+  border-<<<<
+
+fd8a8;
+  color: #a15c07;color: #ffd8a8;
   color: #a15c07;
 }
 
@@ -328,6 +332,8 @@ textarea {
   color: #0f6f78;
 }
 
+
+ codex/build-internal-website-for-klc-ben-luc-b5jncf
 .menu-toggle {
   display: none;
   background: transparent;
