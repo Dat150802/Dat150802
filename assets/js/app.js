@@ -1,1307 +1,1361 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAnalytics, isSupported as isAnalyticsSupported } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
-import {
-  getFirestore,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  addDoc,
-  updateDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import ApiClient from './apiClient.js';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDkqaX1fCdO0xa9v4YUwd0VN3ZjnhyJhvI",
-  authDomain: "klc-ben-luc-crm.firebaseapp.com",
-  projectId: "klc-ben-luc-crm",
-  storageBucket: "klc-ben-luc-crm.firebasestorage.app",
-  messagingSenderId: "499089227125",
-  appId: "1:499089227125:web:a1854adad0026d82c0273c",
-  measurementId: "G-6GTP0HTMWY"
+const SHEETS = {
+  customers: 'Customers',
+  care: 'CustomerCare',
+  warranty: 'Warranty',
+  maintenance: 'Maintenance',
+  checklist: 'Checklist',
+  inventory: 'Inventory',
+  inventoryLog: 'InventoryLog',
+  finance: 'Finance',
+  settings: 'Settings',
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-isAnalyticsSupported().then((supported) => {
-  if (supported) {
-    getAnalytics(app);
-  }
-});
-
-const $ = (selector, parent = document) => parent.querySelector(selector);
-const $$ = (selector, parent = document) => parent.querySelectorAll(selector);
-
-const loader = {
-  overlay: $("#loading-overlay"),
-  show() {
-    this.overlay.classList.remove("hidden");
-  },
-  hide() {
-    this.overlay.classList.add("hidden");
-  }
+const STAFF_DEFAULT = ['Đạt', 'Huỳnh'];
+const STORAGE_KEYS = {
+  session: 'klc_session',
+  rememberedUser: 'klc_remembered_user',
+  theme: 'klc_theme',
+  featureToggle: 'klc_features',
+  staffList: 'klc_staff_list',
+  customerSources: 'klc_customer_sources',
+  checklistTemplate: 'klc_checklist_template',
+  financeCategories: 'klc_finance_categories',
 };
 
 const state = {
   user: null,
-  remember: false,
-  collections: {
+  staySignedIn: false,
+  data: {
     customers: [],
     care: [],
     warranty: [],
     maintenance: [],
     checklist: [],
     inventory: [],
+    inventoryLog: [],
     finance: [],
-    team: []
   },
-  config: {
-    themeColor: localStorage.getItem("themeColor") || "#0f6f78",
-    accentColor: localStorage.getItem("accentColor") || "#f3b63f",
-    driveFolder: localStorage.getItem("driveFolder") || "",
-    driveWebhook: localStorage.getItem("driveWebhook") || "",
-    lastBackup: localStorage.getItem("lastBackup") || "Chưa thực hiện"
+  settings: {
+    staff: [...STAFF_DEFAULT],
+    sources: [],
+    checklistTemplate: [],
+    financeCategories: [],
+    features: {
+      dashboard: true,
+      customers: true,
+      customerCare: true,
+      warranty: true,
+      checklist: true,
+      inventory: true,
+      finance: true,
+    },
+    theme: {
+      primary: '#00796b',
+      secondary: '#ffb300',
+      logoUrl: 'assets/img/logo.svg',
+    },
   },
-  listeners: [],
-  charts: {
-    customers: null,
-    finance: null
-  }
+  charts: {},
 };
 
-applyTheme();
+const elements = {};
 
-const loginForm = $("#login-form");
-const loginScreen = $("#login-screen");
-const appShell = $("#app-shell");
-const pageTitle = $("#page-title");
-const menuButtons = $$(".menu-item");
-const pages = $$(".page");
-const settingsLinks = $$(".settings-link");
-const settingsPanels = $$(".settings-panel");
-const sidebar = $(".sidebar");
-const menuToggle = $("#menu-toggle");
-const logoutButton = $("#logout-button");
-const backupButton = $("#backup-button");
-const downloadBackup = $("#download-backup");
-const driveBackup = $("#drive-backup");
-const backupStatus = $("#backup-status");
-const driveFolderInput = $("#drive-folder");
-const driveWebhookInput = $("#drive-webhook");
-const firebaseStatus = $("#firebase-status");
-const userName = $("#user-name");
-const userRole = $("#user-role");
-
-firebaseStatus.textContent = "Đã kết nối";
-firebaseStatus.classList.add("success");
-
-const forms = {
-  customer: $("#customer-form"),
-  care: $("#care-form"),
-  support: $("#support-form"),
-  checklist: $("#checklist-form"),
-  inventory: $("#inventory-form"),
-  finance: $("#finance-form"),
-  appearance: $("#appearance-form"),
-  team: $("#team-form"),
-  integrations: $("#integrations-form")
-};
-
-const tables = {
-  customers: $("#customer-table tbody"),
-  care: $("#care-table tbody"),
-  warranty: $("#warranty-table tbody"),
-  maintenance: $("#maintenance-table tbody"),
-  checklist: $("#checklist-table tbody"),
-  inventory: $("#inventory-table tbody"),
-  inventorySummary: $("#inventory-summary tbody"),
-  finance: $("#finance-table tbody"),
-  team: $("#team-table tbody")
-};
-
-const inputs = {
-  customerSource: $("#customer-source"),
-  customerSourceDetail: $("#customer-source-detail"),
-  customerStatusPurchased: $("input[name='customer-status'][value='purchased']"),
-  customerStatusPending: $("input[name='customer-status'][value='pending']"),
-  purchaseDetails: $("#purchase-details"),
-  consultDetails: $("#consult-details"),
-  careLostReason: $("#care-lost-reason"),
-  careRatingRadios: $$("input[name='care-rating']"),
-  supportType: $$("input[name='support-type']"),
-  supportStatusRow: $("#support-status-row"),
-  checklistShift: $("#checklist-shift"),
-  checklistTasks: $("#checklist-tasks"),
-  staffSelects: [$("#care-staff"), $("#checklist-staff")],
-  driveFolder: driveFolderInput,
-  driveWebhook: driveWebhookInput,
-  themeColor: $("#theme-color"),
-  accentColor: $("#accent-color"),
-  logoUpload: $("#logo-upload"),
-  globalSearch: $("#global-search"),
-  customerSearch: $("#customer-search"),
-  careSearch: $("#care-search"),
-  supportSearch: $("#support-search"),
-  supportFilter: $("#support-filter"),
-  inventorySearch: $("#inventory-search"),
-  financeMonth: $("#finance-month")
-};
-
-const dashboards = {
-  newCustomers: $("#stat-new-customers"),
-  careForms: $("#stat-care-forms"),
-  supportForms: $("#stat-support"),
-  netIncome: $("#stat-net-income"),
-  activityFeed: $("#activity-feed"),
-  dashboardPeriod: $("#dashboard-period")
-};
-
-const activityTemplate = $("#activity-template").content.firstElementChild;
-const careDetail = $("#care-detail");
-const careUpdateCustomer = $("#care-update-customer");
-
-init();
-
-async function init() {
-  driveFolderInput.value = state.config.driveFolder;
-  backupStatus.textContent = state.config.lastBackup;
-  inputs.themeColor.value = state.config.themeColor;
-  inputs.accentColor.value = state.config.accentColor;
-  driveWebhookInput.value = state.config.driveWebhook;
-  setupEventListeners();
-  updatePurchaseVisibility();
-  updateCareLostVisibility();
-  updateSupportForm();
-  await seedDefaultUsers();
-  autoLogin();
-  startAutoBackup();
+function cacheElements() {
+  elements.loginSection = document.getElementById('loginSection');
+  elements.appShell = document.getElementById('appShell');
+  elements.loginForm = document.getElementById('loginForm');
+  elements.username = document.getElementById('username');
+  elements.password = document.getElementById('password');
+  elements.rememberMe = document.getElementById('rememberMe');
+  elements.staySignedIn = document.getElementById('staySignedIn');
+  elements.loginError = document.getElementById('loginError');
+  elements.currentRole = document.getElementById('currentRole');
+  elements.pageTitle = document.getElementById('pageTitle');
+  elements.navLinks = document.querySelectorAll('.nav-link');
+  elements.pages = document.querySelectorAll('.page');
+  elements.logoutButton = document.getElementById('logoutButton');
+  elements.refreshButton = document.getElementById('refreshButton');
+  elements.loadingOverlay = document.getElementById('loadingOverlay');
+  elements.dashboardSummary = document.getElementById('dashboardSummary');
+  elements.staffPerformance = document.getElementById('staffPerformance');
+  elements.customerFunnel = document.getElementById('customerFunnel');
+  elements.salesChart = document.getElementById('salesChart');
+  elements.customerForm = document.getElementById('customerForm');
+  elements.customerName = document.getElementById('customerName');
+  elements.customerPhone = document.getElementById('customerPhone');
+  elements.customerAddress = document.getElementById('customerAddress');
+  elements.customerNote = document.getElementById('customerNote');
+  elements.customerTableBody = document.querySelector('#customerTable tbody');
+  elements.customerSearch = document.getElementById('customerSearch');
+  elements.customerSource = document.getElementById('customerSource');
+  elements.customerFormReset = document.getElementById('customerFormReset');
+  elements.advisedProducts = document.getElementById('advisedProducts');
+  elements.addAdvisedProduct = document.getElementById('addAdvisedProduct');
+  elements.advisedProductInput = document.getElementById('advisedProductInput');
+  elements.careForm = document.getElementById('careForm');
+  elements.careTableBody = document.querySelector('#careTable tbody');
+  elements.careSearch = document.getElementById('careSearch');
+  elements.careStaff = document.getElementById('careStaff');
+  elements.careDetail = document.getElementById('careDetail');
+  elements.careDetailContent = elements.careDetail?.querySelector('.detail-content');
+  elements.closeCareDetail = document.getElementById('closeCareDetail');
+  elements.updateCustomerFromCare = document.getElementById('updateCustomerFromCare');
+  elements.careStaffList = document.getElementById('careStaffList');
+  elements.customerNameList = document.getElementById('customerNameList');
+  elements.customerPhoneList = document.getElementById('customerPhoneList');
+  elements.lostReason = document.getElementById('lostReason');
+  elements.warrantyForm = document.getElementById('warrantyForm');
+  elements.maintenanceForm = document.getElementById('maintenanceForm');
+  elements.supportFilter = document.getElementById('supportFilter');
+  elements.supportSearch = document.getElementById('supportSearch');
+  elements.warrantyTableBody = document.querySelector('#warrantyTable tbody');
+  elements.maintenanceTableBody = document.querySelector('#maintenanceTable tbody');
+  elements.checklistForm = document.getElementById('checklistForm');
+  elements.checklistStaff = document.getElementById('checklistStaff');
+  elements.checklistShift = document.getElementById('checklistShift');
+  elements.scheduleSlots = document.getElementById('scheduleSlots');
+  elements.checklistTableBody = document.querySelector('#checklistTable tbody');
+  elements.checklistSearch = document.getElementById('checklistSearch');
+  elements.inventoryStats = document.getElementById('inventoryStats');
+  elements.inventoryTableBody = document.querySelector('#inventoryTable tbody');
+  elements.inventoryLogBody = document.querySelector('#inventoryLog tbody');
+  elements.inventorySearch = document.getElementById('inventorySearch');
+  elements.inventoryForms = document.querySelectorAll('#inventory .tab-content form');
+  elements.financeForm = document.getElementById('financeForm');
+  elements.financeStats = document.getElementById('financeStats');
+  elements.incomeTableBody = document.querySelector('#incomeTable tbody');
+  elements.expenseTableBody = document.querySelector('#expenseTable tbody');
+  elements.incomeSearch = document.getElementById('incomeSearch');
+  elements.expenseSearch = document.getElementById('expenseSearch');
+  elements.financeRange = document.getElementById('financeRange');
+  elements.financeDownload = document.getElementById('financeDownload');
+  elements.settingsLinks = document.querySelectorAll('.settings-link');
+  elements.settingsPanels = document.querySelectorAll('.settings-panel');
+  elements.featureToggleForm = document.getElementById('featureToggleForm');
+  elements.settingsCustomerForm = document.getElementById('settingsCustomerForm');
+  elements.settingsCareForm = document.getElementById('settingsCareForm');
+  elements.settingsChecklistForm = document.getElementById('settingsChecklistForm');
+  elements.settingsInventoryForm = document.getElementById('settingsInventoryForm');
+  elements.settingsFinanceForm = document.getElementById('settingsFinanceForm');
+  elements.themeForm = document.getElementById('themeForm');
+  elements.primaryColor = document.getElementById('primaryColor');
+  elements.secondaryColor = document.getElementById('secondaryColor');
+  elements.logoUpload = document.getElementById('logoUpload');
+  elements.resetTheme = document.getElementById('resetTheme');
+  elements.brandLogo = document.getElementById('brandLogo');
+  elements.exportCustomers = document.getElementById('exportCustomers');
+  elements.updateCustomerFromCare = document.getElementById('updateCustomerFromCare');
 }
 
-function setupEventListeners() {
-  loginForm.addEventListener("submit", handleLogin);
-  $("#toggle-password").addEventListener("click", togglePassword);
-  logoutButton.addEventListener("click", handleLogout);
-  backupButton.addEventListener("click", () => triggerBackup("manual"));
-  downloadBackup.addEventListener("click", downloadBackupFile);
-  driveBackup.addEventListener("click", () => triggerDriveBackup(true));
-  forms.integrations.addEventListener("submit", saveIntegrationsConfig);
-  forms.appearance.addEventListener("submit", saveAppearance);
-  $("#appearance-reset").addEventListener("click", resetAppearance);
-  forms.team.addEventListener("submit", handleAddTeamMember);
-  menuToggle.addEventListener("click", () => sidebar.classList.toggle("open"));
-  inputs.customerSource.addEventListener("change", handleSourceChange);
-  inputs.customerStatusPurchased.addEventListener("change", updatePurchaseVisibility);
-  inputs.customerStatusPending.addEventListener("change", updatePurchaseVisibility);
-  inputs.careRatingRadios.forEach((radio) => radio.addEventListener("change", updateCareLostVisibility));
-  inputs.supportType.forEach((radio) => radio.addEventListener("change", updateSupportForm));
-  inputs.checklistShift.addEventListener("change", () => renderShiftTasks(inputs.checklistShift.value));
-  careUpdateCustomer.addEventListener("click", syncCareToCustomer);
-  dashboards.dashboardPeriod.addEventListener("change", renderDashboardStats);
-  inputs.financeMonth.addEventListener("change", renderFinanceSummary);
+function showLoading(message = 'Đang tải dữ liệu...') {
+  if (!elements.loadingOverlay) return;
+  elements.loadingOverlay.querySelector('p').textContent = message;
+  elements.loadingOverlay.classList.remove('hidden');
+}
 
-  [
-    [inputs.globalSearch, filterGlobal],
-    [inputs.customerSearch, filterCustomers],
-    [inputs.careSearch, filterCare],
-    [inputs.supportSearch, filterSupport],
-    [inputs.inventorySearch, filterInventory]
-  ].forEach(([input, handler]) => input && input.addEventListener("input", handler));
+function hideLoading() {
+  elements.loadingOverlay?.classList.add('hidden');
+}
 
-  inputs.supportFilter.addEventListener("change", filterSupport);
-
-  menuButtons.forEach((button) => {
-    button.addEventListener("click", () => switchPage(button.dataset.target));
-  });
-
-  settingsLinks.forEach((link) => {
-    link.addEventListener("click", () => switchSettings(link.dataset.settings));
-  });
-
-  forms.customer.addEventListener("submit", handleCustomerSubmit);
-  forms.care.addEventListener("submit", handleCareSubmit);
-  forms.support.addEventListener("submit", handleSupportSubmit);
-  forms.checklist.addEventListener("submit", handleChecklistSubmit);
-  forms.inventory.addEventListener("submit", handleInventorySubmit);
-  forms.finance.addEventListener("submit", handleFinanceSubmit);
-
-  forms.customer.addEventListener("reset", () => setTimeout(updatePurchaseVisibility));
-  forms.care.addEventListener("reset", () => setTimeout(updateCareLostVisibility));
-  forms.support.addEventListener("reset", () => setTimeout(updateSupportForm));
-  forms.checklist.addEventListener("reset", () => setTimeout(() => renderShiftTasks(inputs.checklistShift.value)));
-
-  inputs.logoUpload.addEventListener("change", handleLogoUpload);
-
-  document.addEventListener("click", (evt) => {
-    if (!sidebar.contains(evt.target) && !menuToggle.contains(evt.target)) {
-      sidebar.classList.remove("open");
+function loadPersistentSettings() {
+  const theme = localStorage.getItem(STORAGE_KEYS.theme);
+  if (theme) {
+    try {
+      state.settings.theme = { ...state.settings.theme, ...JSON.parse(theme) };
+      applyTheme(state.settings.theme);
+    } catch (error) {
+      console.warn('Không thể đọc theme đã lưu', error);
     }
-  });
-}
+  }
 
-async function seedDefaultUsers() {
-  const defaults = [
-    { username: "admin", password: "123456", role: "admin", displayName: "Quản trị viên" },
-    { username: "nhanvien", password: "1234", role: "staff", displayName: "Nhân viên" }
-  ];
+  const staff = localStorage.getItem(STORAGE_KEYS.staffList);
+  if (staff) {
+    try {
+      state.settings.staff = JSON.parse(staff);
+    } catch (error) {
+      console.warn('Không thể đọc danh sách nhân viên đã lưu', error);
+    }
+  }
 
-  await Promise.all(
-    defaults.map(async (user) => {
-      const userDoc = doc(db, "users", user.username);
-      const snapshot = await getDoc(userDoc);
-      if (!snapshot.exists()) {
-        await setDoc(userDoc, {
-          displayName: user.displayName,
-          role: user.role,
-          password: await hashPassword(user.password),
-          active: true,
-          createdAt: serverTimestamp()
-        });
-      }
-    })
-  );
-}
+  const sources = localStorage.getItem(STORAGE_KEYS.customerSources);
+  if (sources) {
+    try {
+      state.settings.sources = JSON.parse(sources);
+      populateCustomerSources();
+    } catch (error) {
+      console.warn('Không thể đọc nguồn khách đã lưu', error);
+    }
+  }
 
-function autoLogin() {
-  const stored = localStorage.getItem("klcUser");
-  const sessionStored = sessionStorage.getItem("klcUser");
-  const userData = stored ? JSON.parse(stored) : sessionStored ? JSON.parse(sessionStored) : null;
-  if (userData) {
-    state.user = userData;
-    loginScreen.classList.add("hidden");
-    appShell.classList.remove("hidden");
-    setupAfterLogin();
+  const checklistTemplate = localStorage.getItem(STORAGE_KEYS.checklistTemplate);
+  if (checklistTemplate) {
+    try {
+      state.settings.checklistTemplate = JSON.parse(checklistTemplate);
+    } catch (error) {
+      console.warn('Không thể đọc checklist template', error);
+    }
+  }
+
+  const financeCategories = localStorage.getItem(STORAGE_KEYS.financeCategories);
+  if (financeCategories) {
+    try {
+      state.settings.financeCategories = JSON.parse(financeCategories);
+    } catch (error) {
+      console.warn('Không thể đọc danh mục thu chi', error);
+    }
+  }
+
+  const features = localStorage.getItem(STORAGE_KEYS.featureToggle);
+  if (features) {
+    try {
+      state.settings.features = { ...state.settings.features, ...JSON.parse(features) };
+      applyFeatureVisibility();
+    } catch (error) {
+      console.warn('Không thể đọc cấu hình chức năng', error);
+    }
   }
 }
 
-async function handleLogin(event) {
-  event.preventDefault();
-  const formData = new FormData(loginForm);
-  const username = formData.get("username").trim();
-  const password = formData.get("password").trim();
-  const remember = $("#remember-me").checked;
-  const keepSession = $("#keep-session").checked;
+function populateCustomerSources() {
+  if (!elements.customerSource) return;
+  const select = elements.customerSource;
+  select.innerHTML = '';
+  const baseOptions =
+    state.settings.sources.length > 0
+      ? state.settings.sources
+      : [
+          'Khách ghé cửa hàng',
+          'Khách online',
+          'Khách cũ giới thiệu',
+          'Khách cũ mua lại',
+          'Người quen nhân viên',
+          'Khác',
+        ];
+  baseOptions.forEach((label) => {
+    const option = document.createElement('option');
+    option.value = label;
+    option.textContent = label;
+    select.appendChild(option);
+  });
+}
 
-  toggleButtonLoading(loginForm.querySelector("button[type='submit']"), true);
-  loader.show();
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (theme.primary) {
+    root.style.setProperty('--color-primary', theme.primary);
+  }
+  if (theme.secondary) {
+    root.style.setProperty('--color-secondary', theme.secondary);
+  }
+  if (elements.primaryColor) elements.primaryColor.value = theme.primary;
+  if (elements.secondaryColor) elements.secondaryColor.value = theme.secondary;
+  if (elements.brandLogo && theme.logoUrl) {
+    elements.brandLogo.src = theme.logoUrl;
+  }
+}
 
+function saveTheme(theme) {
+  localStorage.setItem(STORAGE_KEYS.theme, JSON.stringify(theme));
+}
+
+function applyFeatureVisibility() {
+  Object.entries(state.settings.features).forEach(([key, enabled]) => {
+    const navButton = document.querySelector(`.nav-link[data-target="${key}"]`);
+    const page = document.getElementById(key);
+    if (navButton) navButton.classList.toggle('hidden', !enabled);
+    if (page) page.classList.toggle('hidden', !enabled);
+  });
+}
+
+function restoreSession() {
+  const storedSession = localStorage.getItem(STORAGE_KEYS.session);
+  if (!storedSession) return;
   try {
-    const userDoc = await getDoc(doc(db, "users", username));
-    if (!userDoc.exists()) throw new Error("Tài khoản không tồn tại");
-    const data = userDoc.data();
-    const hashed = await hashPassword(password);
-    if (hashed !== data.password) throw new Error("Sai mật khẩu");
-    if (data.active === false) throw new Error("Tài khoản đã bị vô hiệu hóa");
-
-    state.user = {
-      username,
-      displayName: data.displayName,
-      role: data.role
-    };
-
-    if (remember) {
-      localStorage.setItem("klcUser", JSON.stringify(state.user));
-    } else {
-      localStorage.removeItem("klcUser");
+    const session = JSON.parse(storedSession);
+    if (session?.username && session?.role) {
+      state.user = session;
+      state.staySignedIn = true;
+      showAppShell();
+      loadAllData();
     }
-
-    if (keepSession) {
-      sessionStorage.setItem("klcUser", JSON.stringify(state.user));
-    } else {
-      sessionStorage.removeItem("klcUser");
-    }
-
-    loginScreen.classList.add("hidden");
-    appShell.classList.remove("hidden");
-    setupAfterLogin();
   } catch (error) {
-    alert(error.message);
-  } finally {
-    loader.hide();
-    toggleButtonLoading(loginForm.querySelector("button[type='submit']"), false);
+    console.warn('Không thể đọc session', error);
   }
 }
 
-function setupAfterLogin() {
-  userName.textContent = state.user.displayName;
-  userRole.textContent = state.user.role === "admin" ? "Quản trị viên" : "Nhân viên";
-  sidebar.classList.remove("open");
-  switchPage("dashboard");
-  renderShiftTasks(inputs.checklistShift.value);
-  subscribeCollections();
+function handleLogin(event) {
+  event.preventDefault();
+  const username = elements.username.value.trim();
+  const password = elements.password.value.trim();
+
+  const credentials = {
+    admin: '123456',
+    nhanvien: '1234',
+  };
+
+  if (!credentials[username] || credentials[username] !== password) {
+    elements.loginError.textContent = 'Tài khoản hoặc mật khẩu không đúng';
+    return;
+  }
+
+  const role = username === 'admin' ? 'Quản trị viên' : 'Nhân viên';
+  state.user = { username, role, permissions: role === 'Quản trị viên' ? 'admin' : 'staff' };
+  elements.loginError.textContent = '';
+
+  if (elements.rememberMe.checked) {
+    localStorage.setItem(
+      STORAGE_KEYS.rememberedUser,
+      JSON.stringify({ username, password })
+    );
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.rememberedUser);
+  }
+
+  state.staySignedIn = elements.staySignedIn.checked;
+  if (state.staySignedIn) {
+    localStorage.setItem(STORAGE_KEYS.session, JSON.stringify(state.user));
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.session);
+  }
+
+  showAppShell();
+  loadAllData();
+}
+
+function showAppShell() {
+  elements.loginSection.classList.add('hidden');
+  elements.appShell.classList.remove('hidden');
+  elements.currentRole.textContent = state.user.role;
   applyPermissions();
 }
 
 function applyPermissions() {
-  const isAdmin = state.user.role === "admin";
-  const adminOnlyButtons = [backupButton, downloadBackup, driveBackup, forms.appearance.querySelector("button[type='submit']"), forms.team.querySelector("button[type='submit']"), forms.integrations.querySelector("button[type='submit']")];
+  const isAdmin = state.user.permissions === 'admin';
+  const restrictedForms = [
+    elements.customerForm,
+    elements.careForm,
+    elements.warrantyForm,
+    elements.maintenanceForm,
+    elements.checklistForm,
+    elements.financeForm,
+    ...Array.from(elements.inventoryForms || []),
+  ];
 
-  adminOnlyButtons.forEach((btn) => {
-    if (!btn) return;
-    btn.disabled = !isAdmin;
-    btn.classList.toggle("disabled", !isAdmin);
+  restrictedForms.forEach((form) => {
+    if (!form) return;
+    form.querySelectorAll('input, select, textarea, button').forEach((field) => {
+      if (field.type === 'reset') return;
+      field.disabled = !isAdmin && field.type !== 'search';
+    });
   });
 
-  const adminOnlyForms = [forms.customer, forms.care, forms.support, forms.checklist, forms.inventory, forms.finance];
-  adminOnlyForms.forEach((form) => toggleFormEditable(form, isAdmin));
-
-  if (!isAdmin) {
-    $(".menu-item[data-target='settings']").classList.add("hidden");
-  } else {
-    $(".menu-item[data-target='settings']").classList.remove("hidden");
-  }
-}
-
-function toggleFormEditable(form, enabled) {
-  if (!form) return;
-  form.querySelectorAll("input, select, textarea, button[type='submit']").forEach((element) => {
-    if (element.dataset.allowStaff === "true") return;
-    element.disabled = !enabled;
-  });
+  const settingsNav = document.querySelector('.nav-link[data-target="settings"]');
+  if (settingsNav) settingsNav.classList.toggle('hidden', !isAdmin);
+  const settingsPage = document.getElementById('settings');
+  if (settingsPage) settingsPage.classList.toggle('hidden', !isAdmin);
 }
 
 function handleLogout() {
   state.user = null;
-  localStorage.removeItem("klcUser");
-  sessionStorage.removeItem("klcUser");
-  unsubscribeCollections();
-  appShell.classList.add("hidden");
-  loginScreen.classList.remove("hidden");
-  loginForm.reset();
+  localStorage.removeItem(STORAGE_KEYS.session);
+  elements.appShell.classList.add('hidden');
+  elements.loginSection.classList.remove('hidden');
+  elements.loginForm.reset();
 }
 
-function togglePassword() {
-  const field = $("#password");
-  const isPassword = field.type === "password";
-  field.type = isPassword ? "text" : "password";
-  this.innerHTML = `<i class="fa-solid ${isPassword ? "fa-eye-slash" : "fa-eye"}"></i>`;
-}
-
-function switchPage(target) {
-  pages.forEach((page) => page.classList.toggle("active", page.id === target));
-  menuButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.target === target));
-  const page = pages.find((p) => p.id === target);
-  pageTitle.textContent = page?.dataset.pageTitle || "KLC";
-  sidebar.classList.remove("open");
-}
-
-function switchSettings(target) {
-  settingsLinks.forEach((link) => link.classList.toggle("active", link.dataset.settings === target));
-  settingsPanels.forEach((panel) => panel.classList.toggle("active", panel.dataset.settingsPanel === target));
-}
-
-function handleSourceChange() {
-  const value = inputs.customerSource.value;
-  const placeholderMap = {
-    online: "Từ bài viết nào?",
-    "referral-new": "Được giới thiệu bởi khách nào?",
-    "referral-repeat": "Khách cũ nào quay lại?",
-    staff: "Nhân viên nào giới thiệu?",
-    other: "Nguồn khác?"
-  };
-  const detail = placeholderMap[value];
-  if (detail) {
-    inputs.customerSourceDetail.placeholder = detail;
-    inputs.customerSourceDetail.classList.remove("hidden");
-  } else {
-    inputs.customerSourceDetail.classList.add("hidden");
-    inputs.customerSourceDetail.value = "";
-  }
-}
-
-function updatePurchaseVisibility() {
-  const purchased = inputs.customerStatusPurchased.checked;
-  inputs.purchaseDetails.classList.toggle("hidden", !purchased);
-  inputs.consultDetails.classList.toggle("hidden", purchased);
-}
-
-function updateCareLostVisibility() {
-  const lost = Array.from(inputs.careRatingRadios).find((radio) => radio.checked)?.value === "lost";
-  inputs.careLostReason.classList.toggle("hidden", !lost);
-}
-
-function updateSupportForm() {
-  const value = Array.from(inputs.supportType).find((radio) => radio.checked)?.value;
-  inputs.supportStatusRow.classList.toggle("hidden", value === "maintenance");
-}
-
-function renderShiftTasks(shift) {
-  const slots = {
-    morning: [
-      "08:00",
-      "09:00",
-      "10:00",
-      "11:00",
-      "12:00",
-      "13:00",
-      "14:00",
-      "15:00"
-    ],
-    afternoon: [
-      "13:00",
-      "14:00",
-      "15:00",
-      "16:00",
-      "17:00",
-      "18:00",
-      "19:00",
-      "20:00"
-    ],
-    full: [
-      "08:00",
-      "09:00",
-      "10:00",
-      "11:00",
-      "12:00",
-      "13:00",
-      "14:00",
-      "15:00",
-      "16:00",
-      "17:00",
-      "18:00",
-      "19:00",
-      "20:00"
-    ]
-  };
-  inputs.checklistTasks.innerHTML = "";
-  slots[shift].forEach((time) => {
-    const row = document.createElement("div");
-    row.className = "task-row";
-    row.innerHTML = `
-      <label>${time}</label>
-      <input type="text" name="task-${time.replace(":", "")}" placeholder="Công việc" />
-    `;
-    inputs.checklistTasks.appendChild(row);
-  });
-}
-
-async function handleCustomerSubmit(event) {
-  event.preventDefault();
-  const data = collectFormData(forms.customer);
-  data.status = forms.customer.querySelector("input[name='customer-status']:checked").value;
-  data.source = inputs.customerSource.value;
-  data.sourceDetail = inputs.customerSourceDetail.value;
-  data.purchased = data.status === "purchased";
-  data.price = Number(forms.customer.querySelector("#customer-price").value || 0);
-  data.consulted = forms.customer.querySelector("#customer-consult").value;
-  data.consultPricing = forms.customer.querySelector("#customer-consult-price").value;
-
-  await submitWithLoader(async () => {
-    await addDoc(collection(db, "customers"), {
-      ...data,
-      createdAt: serverTimestamp()
+function setupNavigation() {
+  elements.navLinks.forEach((button) => {
+    button.addEventListener('click', () => {
+      const target = button.dataset.target;
+      switchPage(target, button.textContent.trim());
     });
   });
-  forms.customer.reset();
-  updatePurchaseVisibility();
 }
 
-async function handleCareSubmit(event) {
-  event.preventDefault();
-  const data = collectFormData(forms.care);
-  data.rating = forms.care.querySelector("input[name='care-rating']:checked").value;
-  data.lostReason = inputs.careLostReason.value;
-
-  await submitWithLoader(async () => {
-    await addDoc(collection(db, "care"), {
-      ...data,
-      createdAt: serverTimestamp()
-    });
-  });
-  forms.care.reset();
-  updateCareLostVisibility();
+function switchPage(targetId, title) {
+  elements.navLinks.forEach((btn) => btn.classList.toggle('active', btn.dataset.target === targetId));
+  elements.pages.forEach((page) => page.classList.toggle('active', page.id === targetId));
+  elements.pageTitle.textContent = title;
 }
 
-async function handleSupportSubmit(event) {
-  event.preventDefault();
-  const type = Array.from(inputs.supportType).find((radio) => radio.checked)?.value;
-  const data = collectFormData(forms.support);
-  data.type = type;
-  data.supported = false;
-  data.partsSent = false;
-  data.partsInfo = "";
-
-  await submitWithLoader(async () => {
-    await addDoc(collection(db, "support"), {
-      ...data,
-      createdAt: serverTimestamp()
-    });
-  });
-  forms.support.reset();
-  updateSupportForm();
-}
-
-async function handleChecklistSubmit(event) {
-  event.preventDefault();
-  const data = collectFormData(forms.checklist);
-  const tasks = {};
-  inputs.checklistTasks.querySelectorAll("input").forEach((input) => {
-    if (input.value.trim()) tasks[input.previousElementSibling.textContent] = input.value.trim();
-  });
-  data.tasks = tasks;
-
-  await submitWithLoader(async () => {
-    await addDoc(collection(db, "checklists"), {
-      ...data,
-      createdAt: serverTimestamp()
-    });
-  });
-  forms.checklist.reset();
-  renderShiftTasks(inputs.checklistShift.value);
-}
-
-async function handleInventorySubmit(event) {
-  event.preventDefault();
-  const data = collectFormData(forms.inventory);
-  data.quantity = Number(data.quantity);
-
-  await submitWithLoader(async () => {
-    await addDoc(collection(db, "inventory"), {
-      ...data,
-      createdAt: serverTimestamp()
-    });
-  });
-  forms.inventory.reset();
-}
-
-async function handleFinanceSubmit(event) {
-  event.preventDefault();
-  const data = collectFormData(forms.finance);
-  data.amount = Number(data.amount);
-
-  await submitWithLoader(async () => {
-    await addDoc(collection(db, "finance"), {
-      ...data,
-      createdAt: serverTimestamp()
-    });
-  });
-  forms.finance.reset();
-}
-
-async function handleAddTeamMember(event) {
-  event.preventDefault();
-  if (state.user.role !== "admin") return;
-  const data = collectFormData(forms.team);
-  const username = data.username;
-  const userDoc = doc(db, "users", username);
-  const snapshot = await getDoc(userDoc);
-  if (snapshot.exists()) {
-    alert("Tài khoản đã tồn tại");
-    return;
-  }
-
-  await submitWithLoader(async () => {
-    await setDoc(userDoc, {
-      displayName: data.name,
-      role: data.role,
-      password: await hashPassword(data.password),
-      active: true,
-      createdAt: serverTimestamp()
-    });
-  });
-  forms.team.reset();
-}
-
-async function saveIntegrationsConfig(event) {
-  event.preventDefault();
-  state.config.driveFolder = inputs.driveFolder.value.trim();
-  state.config.driveWebhook = inputs.driveWebhook.value.trim();
-  localStorage.setItem("driveFolder", state.config.driveFolder);
-  localStorage.setItem("driveWebhook", state.config.driveWebhook);
-  alert("Đã lưu cấu hình kết nối.");
-}
-
-async function saveAppearance(event) {
-  event.preventDefault();
-  state.config.themeColor = inputs.themeColor.value;
-  state.config.accentColor = inputs.accentColor.value;
-  localStorage.setItem("themeColor", state.config.themeColor);
-  localStorage.setItem("accentColor", state.config.accentColor);
-  applyTheme();
-  alert("Đã cập nhật giao diện");
-}
-
-function resetAppearance() {
-  inputs.themeColor.value = "#0f6f78";
-  inputs.accentColor.value = "#f3b63f";
-  saveAppearance(new Event("submit"));
-}
-
-function applyTheme() {
-  document.documentElement.style.setProperty("--color-primary", state.config.themeColor || "#0f6f78");
-  document.documentElement.style.setProperty("--color-accent", state.config.accentColor || "#f3b63f");
-}
-
-function collectFormData(form) {
-  const formData = new FormData(form);
-  const data = {};
-  formData.forEach((value, key) => {
-    data[key.replace(/-/g, "")] = typeof value === "string" ? value.trim() : value;
-  });
-  return data;
-}
-
-async function submitWithLoader(fn) {
-  loader.show();
+async function loadAllData() {
+  showLoading('Đang đồng bộ dữ liệu...');
   try {
-    await fn();
+    await Promise.all([
+      loadCustomers(),
+      loadCareRecords(),
+      loadWarrantyRecords(),
+      loadChecklist(),
+      loadInventory(),
+      loadFinance(),
+      loadSettings(),
+    ]);
+    renderDashboard();
   } catch (error) {
-    console.error(error);
-    alert("Không thể lưu dữ liệu. Vui lòng kiểm tra kết nối và thử lại.");
+    console.warn('Không thể tải đầy đủ dữ liệu, sử dụng dữ liệu tạm thời', error);
   } finally {
-    loader.hide();
+    hideLoading();
   }
 }
 
-async function hashPassword(password) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+async function loadCustomers() {
+  try {
+    const records = await ApiClient.fetchRecords(SHEETS.customers);
+    state.data.customers = Array.isArray(records) ? records : [];
+  } catch (error) {
+    state.data.customers = JSON.parse(localStorage.getItem('customers_backup') || '[]');
+  }
+  renderCustomers();
 }
 
-function subscribeCollections() {
-  unsubscribeCollections();
-
-  state.listeners.push(
-    onSnapshot(query(collection(db, "customers"), orderBy("createdAt", "desc")), (snapshot) => {
-      state.collections.customers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      renderCustomers();
-      renderDashboardStats();
-      populateCustomerSuggestions();
-      logActivity("Khách hàng", "Cập nhật danh sách khách hàng");
-    })
-  );
-
-  state.listeners.push(
-    onSnapshot(query(collection(db, "care"), orderBy("createdAt", "desc")), (snapshot) => {
-      state.collections.care = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      renderCare();
-      renderDashboardStats();
-      logActivity("CSKH", "Cập nhật phiếu chăm sóc khách");
-    })
-  );
-
-  state.listeners.push(
-    onSnapshot(query(collection(db, "support"), orderBy("createdAt", "desc")), (snapshot) => {
-      const all = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      state.collections.warranty = all.filter((item) => item.type === "warranty");
-      state.collections.maintenance = all.filter((item) => item.type === "maintenance");
-      renderSupportTables();
-      renderDashboardStats();
-      logActivity("Bảo hành", "Cập nhật phiếu hỗ trợ");
-    })
-  );
-
-  state.listeners.push(
-    onSnapshot(query(collection(db, "checklists"), orderBy("createdAt", "desc")), (snapshot) => {
-      state.collections.checklist = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      renderChecklist();
-      logActivity("CheckList", "Cập nhật công việc nhân viên");
-    })
-  );
-
-  state.listeners.push(
-    onSnapshot(query(collection(db, "inventory"), orderBy("createdAt", "desc")), (snapshot) => {
-      state.collections.inventory = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      renderInventory();
-      logActivity("Tồn kho", "Cập nhật giao dịch kho");
-    })
-  );
-
-  state.listeners.push(
-    onSnapshot(query(collection(db, "finance"), orderBy("createdAt", "desc")), (snapshot) => {
-      state.collections.finance = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      renderFinance();
-      renderDashboardStats();
-      logActivity("Thu & Chi", "Cập nhật giao dịch tài chính");
-    })
-  );
-
-  state.listeners.push(
-    onSnapshot(query(collection(db, "users"), orderBy("createdAt", "desc")), (snapshot) => {
-      state.collections.team = snapshot.docs.map((doc) => ({ username: doc.id, ...doc.data() }));
-      renderTeam();
-      populateStaffSelects();
-    })
-  );
+async function loadCareRecords() {
+  try {
+    const records = await ApiClient.fetchRecords(SHEETS.care);
+    state.data.care = Array.isArray(records) ? records : [];
+  } catch (error) {
+    state.data.care = JSON.parse(localStorage.getItem('care_backup') || '[]');
+  }
+  renderCare();
 }
 
-function unsubscribeCollections() {
-  state.listeners.forEach((unsub) => unsub && unsub());
-  state.listeners = [];
+async function loadWarrantyRecords() {
+  try {
+    const warranty = await ApiClient.fetchRecords(SHEETS.warranty);
+    const maintenance = await ApiClient.fetchRecords(SHEETS.maintenance);
+    state.data.warranty = Array.isArray(warranty) ? warranty : [];
+    state.data.maintenance = Array.isArray(maintenance) ? maintenance : [];
+  } catch (error) {
+    state.data.warranty = JSON.parse(localStorage.getItem('warranty_backup') || '[]');
+    state.data.maintenance = JSON.parse(localStorage.getItem('maintenance_backup') || '[]');
+  }
+  renderWarranty();
+}
+
+async function loadChecklist() {
+  try {
+    const records = await ApiClient.fetchRecords(SHEETS.checklist);
+    state.data.checklist = Array.isArray(records) ? records : [];
+  } catch (error) {
+    state.data.checklist = JSON.parse(localStorage.getItem('checklist_backup') || '[]');
+  }
+  renderChecklist();
+}
+
+async function loadInventory() {
+  try {
+    const inventory = await ApiClient.fetchRecords(SHEETS.inventory);
+    const log = await ApiClient.fetchRecords(SHEETS.inventoryLog);
+    state.data.inventory = Array.isArray(inventory) ? inventory : [];
+    state.data.inventoryLog = Array.isArray(log) ? log : [];
+  } catch (error) {
+    state.data.inventory = JSON.parse(localStorage.getItem('inventory_backup') || '[]');
+    state.data.inventoryLog = JSON.parse(localStorage.getItem('inventory_log_backup') || '[]');
+  }
+  renderInventory();
+}
+
+async function loadFinance() {
+  try {
+    const records = await ApiClient.fetchRecords(SHEETS.finance);
+    state.data.finance = Array.isArray(records) ? records : [];
+  } catch (error) {
+    state.data.finance = JSON.parse(localStorage.getItem('finance_backup') || '[]');
+  }
+  renderFinance();
+}
+
+async function loadSettings() {
+  try {
+    const response = await ApiClient.request('getSettings');
+    if (response?.settings) {
+      Object.assign(state.settings, response.settings);
+    }
+  } catch (error) {
+    console.warn('Không thể tải settings từ API, dùng localStorage');
+  }
+  loadPersistentSettings();
+  populateStaffSelectors();
+  populateCustomerSources();
+  hydrateSettingsForms();
+}
+
+function hydrateSettingsForms() {
+  if (elements.careStaffList) {
+    elements.careStaffList.value = state.settings.staff.join(', ');
+  }
+  const sourcesArea = document.getElementById('customerSourceOptions');
+  if (sourcesArea) {
+    sourcesArea.value = state.settings.sources.join('\n');
+  }
+  const checklistArea = document.getElementById('checklistTemplate');
+  if (checklistArea) {
+    checklistArea.value = state.settings.checklistTemplate.join('\n');
+  }
+  const financeArea = document.getElementById('financeCategories');
+  if (financeArea) {
+    financeArea.value = state.settings.financeCategories.join('\n');
+  }
+  const thresholdInput = document.getElementById('inventoryThreshold');
+  if (thresholdInput && state.settings.inventoryThreshold) {
+    thresholdInput.value = state.settings.inventoryThreshold;
+  }
+}
+
+function renderDashboard() {
+  renderDashboardSummary();
+  renderStaffPerformance();
+  renderCustomerFunnel();
+  renderSalesChart();
+}
+
+function renderDashboardSummary() {
+  const totals = {
+    customers: state.data.customers.length,
+    care: state.data.care.length,
+    warranty: state.data.warranty.length + state.data.maintenance.length,
+    finance: state.data.finance.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+  };
+
+  elements.dashboardSummary.innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h4>Khách hàng mới</h4>
+        <strong>${totals.customers}</strong>
+      </div>
+      <div class="stat-card">
+        <h4>CSKH đã thực hiện</h4>
+        <strong>${totals.care}</strong>
+      </div>
+      <div class="stat-card">
+        <h4>Hồ sơ bảo hành</h4>
+        <strong>${totals.warranty}</strong>
+      </div>
+      <div class="stat-card">
+        <h4>Doanh thu (VNĐ)</h4>
+        <strong>${totals.finance.toLocaleString('vi-VN')}</strong>
+      </div>
+    </div>`;
+}
+
+function renderStaffPerformance() {
+  if (!elements.staffPerformance) return;
+  const staffMap = {};
+  state.data.care.forEach((record) => {
+    const staff = record.staff || record.careStaff || 'Không xác định';
+    if (!staffMap[staff]) staffMap[staff] = { care: 0, checklist: 0 };
+    staffMap[staff].care += 1;
+  });
+  state.data.checklist.forEach((record) => {
+    const staff = record.staff || record.employee || 'Không xác định';
+    if (!staffMap[staff]) staffMap[staff] = { care: 0, checklist: 0 };
+    staffMap[staff].checklist += 1;
+  });
+
+  const cards = Object.entries(staffMap).map(
+    ([name, stats]) => `
+      <div class="stat-card">
+        <h4>${name}</h4>
+        <p>CSKH: <strong>${stats.care}</strong></p>
+        <p>Checklist: <strong>${stats.checklist}</strong></p>
+      </div>`
+  );
+  elements.staffPerformance.innerHTML = cards.join('') || '<p>Chưa có dữ liệu.</p>';
+}
+
+function renderCustomerFunnel() {
+  if (!elements.customerFunnel) return;
+  const summary = { potential: 0, nurturing: 0, scheduled: 0, lost: 0 };
+  state.data.care.forEach((record) => {
+    const rating = record.careRating || record.rating;
+    if (rating && summary[rating] !== undefined) {
+      summary[rating] += 1;
+    }
+  });
+  elements.customerFunnel.innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card"><h4>Còn tiềm năng</h4><strong>${summary.potential}</strong></div>
+      <div class="stat-card"><h4>Đang nuôi dưỡng</h4><strong>${summary.nurturing}</strong></div>
+      <div class="stat-card"><h4>Đang hẹn</h4><strong>${summary.scheduled}</strong></div>
+      <div class="stat-card"><h4>Hết tiềm năng</h4><strong>${summary.lost}</strong></div>
+    </div>`;
+}
+
+function renderSalesChart() {
+  if (!elements.salesChart) return;
+  const ctx = elements.salesChart.getContext('2d');
+  const labels = [];
+  const data = [];
+  const grouped = {};
+  state.data.finance.forEach((entry) => {
+    if (entry.type === 'income') {
+      const month = entry.date?.slice(0, 7) || 'Không xác định';
+      grouped[month] = (grouped[month] || 0) + Number(entry.amount || 0);
+    }
+  });
+  Object.keys(grouped)
+    .sort()
+    .forEach((month) => {
+      labels.push(month);
+      data.push(grouped[month]);
+    });
+
+  if (state.charts.sales) {
+    state.charts.sales.data.labels = labels;
+    state.charts.sales.data.datasets[0].data = data;
+    state.charts.sales.update();
+  } else {
+    state.charts.sales = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Doanh thu',
+            data,
+            borderColor: getComputedStyle(document.documentElement).getPropertyValue(
+              '--color-primary'
+            ),
+            backgroundColor: 'rgba(0, 121, 107, 0.2)',
+            tension: 0.4,
+            fill: true,
+          },
+        ],
+      },
+      options: {
+        plugins: {
+          legend: { display: false },
+        },
+        scales: {
+          y: {
+            ticks: {
+              callback: (value) => Number(value).toLocaleString('vi-VN'),
+            },
+          },
+        },
+      },
+    });
+  }
 }
 
 function renderCustomers() {
-  tables.customers.innerHTML = state.collections.customers
-    .map((customer) => {
-      const statusLabel = customer.status === "purchased" ? "Đã mua" : "Chưa mua";
-      return `
-        <tr data-id="${customer.id}" data-status="${customer.status}" data-name="${customer.name}" data-phone="${customer.phone}">
-          <td>${formatDate(customer.date)}</td>
-          <td>${customer.name || ""}</td>
-          <td>${customer.phone || ""}</td>
-          <td>${formatSource(customer.source, customer.sourceDetail)}</td>
-          <td><span class="badge badge-${customer.status}">${statusLabel}</span></td>
-          <td><button class="btn ghost btn-xs" data-link="care" data-id="${customer.id}">CSKH</button></td>
-          <td><button class="btn ghost btn-xs" data-link="history" data-id="${customer.id}">Xem</button></td>
-        </tr>
-      `;
-    })
-    .join("");
-}
-
-function renderCare() {
-  tables.care.innerHTML = state.collections.care
-    .map((care) => {
-      return `
-        <tr data-id="${care.id}" data-name="${care.name}" data-phone="${care.phone}" data-staff="${care.staff}">
-          <td>${formatDate(care.date)}</td>
-          <td>${care.name}</td>
-          <td>${care.staff}</td>
-          <td>${formatCareMethod(care.method)}</td>
-          <td>${formatCareRating(care.rating)}</td>
-          <td><button class="btn ghost btn-xs" data-detail="${care.id}">Chi tiết</button></td>
-        </tr>
-      `;
-    })
-    .join("");
-
-  tables.care.querySelectorAll("button[data-detail]").forEach((button) => {
-    button.addEventListener("click", () => showCareDetail(button.dataset.detail));
-  });
-}
-
-function showCareDetail(id) {
-  const record = state.collections.care.find((item) => item.id === id);
-  if (!record) return;
-  careDetail.innerHTML = `
-    <h4>${record.name}</h4>
-    <p><strong>Ngày:</strong> ${formatDate(record.date)}</p>
-    <p><strong>Nhân viên:</strong> ${record.staff}</p>
-    <p><strong>Hình thức:</strong> ${formatCareMethod(record.method)}</p>
-    <p><strong>Nội dung:</strong><br />${record.content || "-"}</p>
-    <p><strong>Phản hồi:</strong><br />${record.feedback || "-"}</p>
-    <p><strong>Đánh giá:</strong> ${formatCareRating(record.rating)}</p>
-    ${record.rating === "lost" ? `<p><strong>Lý do:</strong> ${record.lostReason || "-"}</p>` : ""}
-    <p><strong>Ghi chú:</strong><br />${record.notes || "-"}</p>
-  `;
-  careDetail.dataset.customer = record.name;
-  careDetail.dataset.phone = record.phone;
-}
-
-function syncCareToCustomer() {
-  if (!careDetail.dataset.customer) {
-    alert("Vui lòng chọn một phiếu CSKH trước");
-    return;
-  }
-  const name = careDetail.dataset.customer;
-  const phone = careDetail.dataset.phone;
-  const customer = state.collections.customers.find((item) => item.name === name || item.phone === phone);
-  if (!customer) {
-    alert("Chưa có khách hàng tương ứng");
-    return;
-  }
-  alert(`Đã đồng bộ thông tin chăm sóc cho khách ${name}. Vui lòng mở trang khách hàng để cập nhật chi tiết.`);
-}
-
-function renderSupportTables() {
-  const buildRow = (item) => {
-    return `
-      <tr data-id="${item.id}" data-supported="${item.supported}" data-parts="${item.partsSent}">
-        <td>${formatDate(item.date)}</td>
-        <td>${item.name}</td>
-        <td>${item.phone}</td>
-        <td>${item.product || ""}</td>
-        <td>
-          <label class="toggle">
-            <input type="checkbox" ${item.supported ? "checked" : ""} data-action="supported" data-id="${item.id}">
-            <span>Đã hỗ trợ</span>
-          </label>
-        </td>
-        <td>
-          <label class="toggle">
-            <input type="checkbox" ${item.partsSent ? "checked" : ""} data-action="parts" data-id="${item.id}">
-            <span>Gửi linh kiện</span>
-          </label>
-        </td>
-        <td><button class="btn ghost btn-xs" data-support-detail="${item.id}">Chi tiết</button></td>
-      </tr>
-    `;
-  };
-
-  tables.warranty.innerHTML = state.collections.warranty.map(buildRow).join("");
-  tables.maintenance.innerHTML = state.collections.maintenance.map(buildRow).join("");
-
-  $$("input[data-action='supported']").forEach((checkbox) => {
-    checkbox.disabled = state.user.role !== "admin";
-    checkbox.addEventListener("change", () => updateSupportStatus(checkbox.dataset.id, "supported", checkbox.checked));
-  });
-  $$("input[data-action='parts']").forEach((checkbox) => {
-    checkbox.disabled = state.user.role !== "admin";
-    checkbox.addEventListener("change", () => updateSupportStatus(checkbox.dataset.id, "partsSent", checkbox.checked));
-  });
-
-  filterSupport();
-}
-
-async function updateSupportStatus(id, field, value) {
-  if (state.user.role !== "admin") {
-    alert("Chỉ quản trị viên mới có quyền cập nhật trạng thái.");
-    return;
-  }
-  loader.show();
-  try {
-    await updateDoc(doc(db, "support", id), {
-      [field]: value,
-      ...(field === "partsSent" && value
-        ? {
-            partsInfo: `${new Date().toLocaleString("vi-VN")}`
-          }
-        : {})
-    });
-  } catch (error) {
-    alert("Không thể cập nhật trạng thái");
-  } finally {
-    loader.hide();
-  }
-}
-
-function renderChecklist() {
-  tables.checklist.innerHTML = state.collections.checklist
-    .map((item) => {
-      return `
-        <tr>
-          <td>${formatDate(item.date)}</td>
-          <td>${item.staff}</td>
-          <td>${formatShift(item.shift)}</td>
-          <td>${item.summary || "-"}</td>
-          <td><button class="btn ghost btn-xs" data-checklist="${item.id}">Chi tiết</button></td>
-        </tr>
-      `;
-    })
-    .join("");
-}
-
-function renderInventory() {
-  tables.inventory.innerHTML = state.collections.inventory
-    .map((item) => `
+  if (!elements.customerTableBody) return;
+  const rows = state.data.customers.map((item) => `
       <tr>
-        <td>${formatDate(item.date)}</td>
-        <td>${item.item}</td>
-        <td>${item.type === "in" ? "Nhập" : "Xuất"}</td>
-        <td>${item.quantity}</td>
-        <td>${item.notes || ""}</td>
-      </tr>
-    `)
-    .join("");
-
-  const summary = {};
-  state.collections.inventory.forEach((item) => {
-    if (!summary[item.item]) summary[item.item] = 0;
-    summary[item.item] += item.type === "in" ? Number(item.quantity) : -Number(item.quantity);
-  });
-
-  tables.inventorySummary.innerHTML = Object.entries(summary)
-    .map(([name, quantity]) => `
-      <tr>
-        <td>${name}</td>
-        <td>${quantity}</td>
-      </tr>
-    `)
-    .join("");
-}
-
-function renderFinance() {
-  tables.finance.innerHTML = state.collections.finance
-    .map((item) => `
-      <tr>
-        <td>${formatDate(item.date)}</td>
-        <td>${item.type === "income" ? "Thu" : "Chi"}</td>
-        <td>${item.category}</td>
-        <td>${formatCurrency(item.amount)}</td>
-        <td>${item.notes || ""}</td>
-      </tr>
-    `)
-    .join("");
-  renderFinanceSummary();
-  renderFinanceChart();
-}
-
-function renderFinanceSummary() {
-  const month = inputs.financeMonth.value;
-  const summaryElement = $("#finance-summary");
-  const data = month
-    ? state.collections.finance.filter((item) => item.date?.startsWith(month))
-    : state.collections.finance;
-  const income = data.filter((item) => item.type === "income").reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const expense = data.filter((item) => item.type === "expense").reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const net = income - expense;
-  summaryElement.innerHTML = `
-    <div class="summary-item"><span>Tổng thu</span><strong>${formatCurrency(income)}</strong></div>
-    <div class="summary-item"><span>Tổng chi</span><strong>${formatCurrency(expense)}</strong></div>
-    <div class="summary-item"><span>Lợi nhuận</span><strong>${formatCurrency(net)}</strong></div>
-  `;
-}
-
-function renderTeam() {
-  tables.team.innerHTML = state.collections.team
-    .map((member) => `
-      <tr>
-        <td>${member.displayName}</td>
-        <td>${member.username}</td>
-        <td>${member.role === "admin" ? "Quản trị viên" : "Nhân viên"}</td>
-        <td>${member.active ? "Đang hoạt động" : "Ngưng"}</td>
-      </tr>
-    `)
-    .join("");
+        <td>${item.date || ''}</td>
+        <td>${item.name || ''}</td>
+        <td>${item.phone || ''}</td>
+        <td>${item.source || item.customerSource || ''}</td>
+        <td>${item.purchaseStatus || ''}</td>
+        <td><button class="btn ghost btn-small" data-action="cskh" data-id="${item.id || ''}">CSKH</button></td>
+        <td><button class="btn ghost btn-small" data-action="history" data-id="${item.id || ''}">Xem</button></td>
+      </tr>`);
+  elements.customerTableBody.innerHTML = rows.join('') || '<tr><td colspan="7">Chưa có dữ liệu.</td></tr>';
+  populateCustomerSuggestions();
 }
 
 function populateCustomerSuggestions() {
-  const nameList = $("#customer-name-suggestions");
-  const phoneList = $("#customer-phone-suggestions");
-  nameList.innerHTML = state.collections.customers.map((customer) => `<option value="${customer.name}"></option>`).join("");
-  phoneList.innerHTML = state.collections.customers.map((customer) => `<option value="${customer.phone}"></option>`).join("");
-}
-
-function populateStaffSelects() {
-  const options = state.collections.team
-    .filter((member) => member.active !== false)
-    .map((member) => `<option value="${member.displayName}">${member.displayName}</option>`)
-    .join("");
-  inputs.staffSelects.forEach((select) => {
-    if (!select) return;
-    select.innerHTML = options;
+  if (!elements.customerNameList || !elements.customerPhoneList) return;
+  elements.customerNameList.innerHTML = '';
+  elements.customerPhoneList.innerHTML = '';
+  state.data.customers.forEach((customer) => {
+    const nameOption = document.createElement('option');
+    nameOption.value = customer.name || '';
+    elements.customerNameList.appendChild(nameOption);
+    const phoneOption = document.createElement('option');
+    phoneOption.value = customer.phone || '';
+    elements.customerPhoneList.appendChild(phoneOption);
   });
 }
 
-function renderDashboardStats() {
-  const days = Number(dashboards.dashboardPeriod.value);
-  const fromDate = new Date();
-  fromDate.setDate(fromDate.getDate() - days);
-
-  const filterByDate = (items) =>
-    items.filter((item) => {
-      if (!item.date) return false;
-      const itemDate = new Date(item.date);
-      return !isNaN(itemDate) && itemDate >= fromDate;
-    });
-
-  const customers = filterByDate(state.collections.customers);
-  const care = filterByDate(state.collections.care);
-  const support = filterByDate([...state.collections.warranty, ...state.collections.maintenance]);
-  const finance = filterByDate(state.collections.finance);
-
-  dashboards.newCustomers.textContent = customers.length;
-  dashboards.careForms.textContent = care.length;
-  dashboards.supportForms.textContent = support.length;
-
-  const net = finance.reduce((sum, item) => sum + (item.type === "income" ? Number(item.amount) : -Number(item.amount)), 0);
-  dashboards.netIncome.textContent = `${formatCurrency(net)}`;
-
-  renderCustomersChart();
-  renderFinanceChart();
+function renderCare() {
+  if (!elements.careTableBody) return;
+  const rows = state.data.care.map((item, index) => `
+      <tr data-index="${index}">
+        <td>${item.date || ''}</td>
+        <td>${item.name || ''}</td>
+        <td>${item.staff || ''}</td>
+        <td>${item.method || ''}</td>
+        <td>${item.careRating || ''}</td>
+        <td><button class="btn ghost btn-small" data-action="detail">Chi tiết</button></td>
+      </tr>`);
+  elements.careTableBody.innerHTML = rows.join('') || '<tr><td colspan="6">Chưa có dữ liệu.</td></tr>';
 }
 
-function renderCustomersChart() {
-  const ctx = $("#customers-chart");
-  const grouped = groupByMonth(state.collections.customers, "date");
-  const labels = Object.keys(grouped);
-  const data = Object.values(grouped);
+function renderWarranty() {
+  const warrantyRows = state.data.warranty.map((item) => renderSupportRow(item, 'warranty'));
+  const maintenanceRows = state.data.maintenance.map((item) => renderSupportRow(item, 'maintenance'));
+  elements.warrantyTableBody.innerHTML =
+    warrantyRows.join('') || '<tr><td colspan="4">Chưa có dữ liệu.</td></tr>';
+  elements.maintenanceTableBody.innerHTML =
+    maintenanceRows.join('') || '<tr><td colspan="4">Chưa có dữ liệu.</td></tr>';
+}
 
-  if (state.charts.customers) state.charts.customers.destroy();
+function renderSupportRow(item, type) {
+  const supportStatus = item.supportStatus || 'pending';
+  const supported = supportStatus === 'supported';
+  const parts = supportStatus === 'parts';
+  const classes = ['btn', 'ghost', 'btn-small'];
+  return `
+    <tr data-id="${item.id || ''}" data-type="${type}" data-status="${supportStatus}">
+      <td>${item.date || ''}</td>
+      <td>${item.name || ''}</td>
+      <td>${type === 'warranty' ? item.status || '' : item.request || ''}</td>
+      <td>
+        <div class="support-actions">
+          <label class="checkbox"><input type="checkbox" data-action="supported" ${
+            supported ? 'checked' : ''
+          } /> Đã hỗ trợ</label>
+          <label class="checkbox"><input type="checkbox" data-action="parts" ${
+            parts ? 'checked' : ''
+          } /> Gửi linh kiện</label>
+        </div>
+      </td>
+    </tr>`;
+}
 
-  state.charts.customers = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Khách hàng mới",
-          data,
-          borderColor: getComputedStyle(document.documentElement).getPropertyValue("--color-primary"),
-          backgroundColor: "rgba(15, 111, 120, 0.2)",
-          tension: 0.4,
-          fill: true
-        }
-      ]
+function renderChecklist() {
+  if (!elements.checklistTableBody) return;
+  const rows = state.data.checklist.map((item) => `
+      <tr>
+        <td>${item.date || ''}</td>
+        <td>${item.staff || ''}</td>
+        <td>${formatShift(item.shift)}</td>
+        <td>${item.summary || ''}</td>
+        <td>${item.pending || ''}</td>
+      </tr>`);
+  elements.checklistTableBody.innerHTML = rows.join('') || '<tr><td colspan="5">Chưa có dữ liệu.</td></tr>';
+}
+
+function renderInventory() {
+  const stats = calculateInventoryStats();
+  elements.inventoryStats.innerHTML = `
+    <div class="stat-card"><h4>Tổng mặt hàng</h4><strong>${stats.totalItems}</strong></div>
+    <div class="stat-card"><h4>Tồn cuối</h4><strong>${stats.totalStock}</strong></div>
+    <div class="stat-card"><h4>Giá trị tồn (ước tính)</h4><strong>${stats.totalValue.toLocaleString(
+      'vi-VN'
+    )}</strong></div>`;
+
+  const rows = state.data.inventory.map((item) => `
+      <tr>
+        <td>${item.code || ''}</td>
+        <td>${item.name || ''}</td>
+        <td>${item.opening || 0}</td>
+        <td>${item.import || 0}</td>
+        <td>${item.export || 0}</td>
+        <td>${item.closing || 0}</td>
+      </tr>`);
+  elements.inventoryTableBody.innerHTML = rows.join('') || '<tr><td colspan="6">Chưa có dữ liệu.</td></tr>';
+
+  const logRows = state.data.inventoryLog.map((item) => `
+      <tr>
+        <td>${item.date || ''}</td>
+        <td>${item.type || ''}</td>
+        <td>${item.code || ''}</td>
+        <td>${item.name || ''}</td>
+        <td>${item.quantity || ''}</td>
+        <td>${item.note || ''}</td>
+      </tr>`);
+  elements.inventoryLogBody.innerHTML = logRows.join('') || '<tr><td colspan="6">Chưa có dữ liệu.</td></tr>';
+}
+
+function renderFinance() {
+  const totals = state.data.finance.reduce(
+    (acc, item) => {
+      const amount = Number(item.amount || 0);
+      if (item.type === 'income') acc.income += amount;
+      if (item.type === 'expense') acc.expense += amount;
+      return acc;
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false
-    }
+    { income: 0, expense: 0 }
+  );
+  const profit = totals.income - totals.expense;
+  elements.financeStats.innerHTML = `
+    <div class="stat-card"><h4>Tổng thu</h4><strong>${totals.income.toLocaleString(
+      'vi-VN'
+    )}</strong></div>
+    <div class="stat-card"><h4>Tổng chi</h4><strong>${totals.expense.toLocaleString(
+      'vi-VN'
+    )}</strong></div>
+    <div class="stat-card"><h4>Lợi nhuận</h4><strong>${profit.toLocaleString('vi-VN')}</strong></div>`;
+
+  const incomeRows = state.data.finance
+    .filter((item) => item.type === 'income')
+    .map((item) => `
+        <tr>
+          <td>${item.date || ''}</td>
+          <td>${item.title || ''}</td>
+          <td>${Number(item.amount || 0).toLocaleString('vi-VN')}</td>
+        </tr>`);
+  elements.incomeTableBody.innerHTML =
+    incomeRows.join('') || '<tr><td colspan="3">Chưa có dữ liệu thu.</td></tr>';
+
+  const expenseRows = state.data.finance
+    .filter((item) => item.type === 'expense')
+    .map((item) => `
+        <tr>
+          <td>${item.date || ''}</td>
+          <td>${item.title || ''}</td>
+          <td>${Number(item.amount || 0).toLocaleString('vi-VN')}</td>
+        </tr>`);
+  elements.expenseTableBody.innerHTML =
+    expenseRows.join('') || '<tr><td colspan="3">Chưa có dữ liệu chi.</td></tr>';
+}
+
+function calculateInventoryStats() {
+  let totalStock = 0;
+  let totalValue = 0;
+  state.data.inventory.forEach((item) => {
+    const closing = Number(item.closing || item.stock || 0);
+    totalStock += closing;
+    totalValue += closing * Number(item.cost || item.price || 0);
   });
+  return {
+    totalItems: state.data.inventory.length,
+    totalStock,
+    totalValue,
+  };
 }
 
-function renderFinanceChart() {
-  const ctx = $("#finance-chart");
-  const income = groupByMonth(state.collections.finance.filter((item) => item.type === "income"), "date");
-  const expense = groupByMonth(state.collections.finance.filter((item) => item.type === "expense"), "date");
-  const labels = Array.from(new Set([...Object.keys(income), ...Object.keys(expense)])).sort();
-  const incomeData = labels.map((label) => income[label] || 0);
-  const expenseData = labels.map((label) => expense[label] || 0);
-
-  if (state.charts.finance) state.charts.finance.destroy();
-
-  state.charts.finance = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Thu",
-          data: incomeData,
-          backgroundColor: "rgba(15, 111, 120, 0.7)"
-        },
-        {
-          label: "Chi",
-          data: expenseData,
-          backgroundColor: "rgba(243, 182, 63, 0.7)"
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          ticks: {
-            callback: (value) => `${Number(value).toLocaleString("vi-VN")}`
-          }
-        }
-      }
-    }
-  });
-}
-
-function filterGlobal(event) {
-  const query = event.target.value.toLowerCase();
-  [tables.customers, tables.care, tables.warranty, tables.maintenance, tables.inventory, tables.finance].forEach((tbody) => {
-    Array.from(tbody?.rows || []).forEach((row) => {
-      row.style.display = row.textContent.toLowerCase().includes(query) ? "" : "none";
-    });
-  });
-}
-
-function filterCustomers(event) {
-  filterTable(tables.customers, event.target.value);
-}
-
-function filterCare(event) {
-  filterTable(tables.care, event.target.value);
-}
-
-function filterSupport() {
-  const query = inputs.supportSearch.value.toLowerCase();
-  const filter = inputs.supportFilter.value;
-
-  [tables.warranty, tables.maintenance].forEach((tbody) => {
-    Array.from(tbody.rows).forEach((row) => {
-      const matchesQuery = row.textContent.toLowerCase().includes(query);
-      const supported = row.dataset.supported === "true";
-      const parts = row.dataset.parts === "true";
-      let matchesFilter = true;
-      if (filter === "pending") matchesFilter = !supported;
-      if (filter === "done") matchesFilter = supported;
-      if (filter === "parts") matchesFilter = parts;
-      row.style.display = matchesQuery && matchesFilter ? "" : "none";
-    });
-  });
-}
-
-function filterInventory(event) {
-  filterTable(tables.inventory, event.target.value);
-}
-
-function filterTable(tbody, keyword) {
-  if (!tbody) return;
-  const query = keyword.toLowerCase();
-  Array.from(tbody.rows).forEach((row) => {
-    row.style.display = row.textContent.toLowerCase().includes(query) ? "" : "none";
-  });
-}
-
-function logActivity(module, message) {
-  const li = activityTemplate.cloneNode(true);
-  li.querySelector(".timeline-title").textContent = `${module}: ${message}`;
-  li.querySelector(".timeline-time").textContent = new Date().toLocaleString("vi-VN");
-  dashboards.activityFeed.prepend(li);
-  while (dashboards.activityFeed.children.length > 10) {
-    dashboards.activityFeed.removeChild(dashboards.activityFeed.lastElementChild);
+function formatShift(value) {
+  switch (value) {
+    case 'morning':
+      return 'Ca sáng (08:00 - 16:00)';
+    case 'afternoon':
+      return 'Ca chiều (13:00 - 21:00)';
+    case 'full':
+      return 'Ca full (08:00 - 21:00)';
+    default:
+      return value || '';
   }
 }
 
-function groupByMonth(items, field) {
-  return items.reduce((acc, item) => {
-    if (!item[field]) return acc;
-    const date = new Date(item[field]);
-    if (isNaN(date)) return acc;
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    acc[key] = (acc[key] || 0) + (item.amount ? Number(item.amount) : 1);
-    return acc;
-  }, {});
+function setupEventListeners() {
+  elements.loginForm?.addEventListener('submit', handleLogin);
+  elements.logoutButton?.addEventListener('click', handleLogout);
+  elements.refreshButton?.addEventListener('click', loadAllData);
+  elements.customerSource?.addEventListener('change', handleCustomerSourceChange);
+  elements.customerForm?.addEventListener('submit', handleCustomerSubmit);
+  elements.customerFormReset?.addEventListener('click', resetCustomerForm);
+  elements.addAdvisedProduct?.addEventListener('click', handleAddAdvisedProduct);
+  elements.customerSearch?.addEventListener('input', handleCustomerSearch);
+  elements.careForm?.addEventListener('submit', handleCareSubmit);
+  elements.careSearch?.addEventListener('input', handleCareSearch);
+  elements.careTableBody?.addEventListener('click', handleCareTableClick);
+  elements.closeCareDetail?.addEventListener('click', () => elements.careDetail.classList.add('hidden'));
+  elements.updateCustomerFromCare?.addEventListener('click', fillCustomerFromCareDetail);
+  elements.careStaff?.addEventListener('change', () => {});
+  elements.careForm?.querySelectorAll('input[name="careRating"]').forEach((radio) => {
+    radio.addEventListener('change', handleCareRatingChange);
+  });
+  elements.warrantyForm?.addEventListener('submit', handleSupportSubmit);
+  elements.maintenanceForm?.addEventListener('submit', handleSupportSubmit);
+  document.querySelectorAll('#warranty .tab-link').forEach((tab) =>
+    tab.addEventListener('click', (event) => handleTabSwitch(event, '#warranty'))
+  );
+  elements.supportFilter?.addEventListener('change', filterSupportTables);
+  elements.supportSearch?.addEventListener('input', filterSupportTables);
+  document
+    .querySelector('#warranty .split-list')
+    ?.addEventListener('change', handleSupportStatusChange);
+  elements.checklistForm?.addEventListener('submit', handleChecklistSubmit);
+  elements.checklistStaff?.addEventListener('change', () => {});
+  elements.checklistShift?.addEventListener('change', handleShiftChange);
+  elements.checklistSearch?.addEventListener('input', handleChecklistSearch);
+  elements.inventoryForms?.forEach((form) => form.addEventListener('submit', handleInventorySubmit));
+  document.querySelectorAll('#inventory .tab-link').forEach((tab) =>
+    tab.addEventListener('click', (event) => handleTabSwitch(event, '#inventory'))
+  );
+  elements.inventorySearch?.addEventListener('input', handleInventorySearch);
+  elements.financeForm?.addEventListener('submit', handleFinanceSubmit);
+  elements.incomeSearch?.addEventListener('input', handleFinanceSearch);
+  elements.expenseSearch?.addEventListener('input', handleFinanceSearch);
+  elements.financeDownload?.addEventListener('click', exportFinanceReport);
+  elements.featureToggleForm?.addEventListener('submit', handleFeatureToggleSubmit);
+  elements.settingsCustomerForm?.addEventListener('submit', handleCustomerSettingsSubmit);
+  elements.settingsCareForm?.addEventListener('submit', handleStaffSettingsSubmit);
+  elements.settingsChecklistForm?.addEventListener('submit', handleChecklistSettingsSubmit);
+  elements.settingsInventoryForm?.addEventListener('submit', handleInventorySettingsSubmit);
+  elements.settingsFinanceForm?.addEventListener('submit', handleFinanceSettingsSubmit);
+  elements.themeForm?.addEventListener('submit', handleThemeSubmit);
+  elements.resetTheme?.addEventListener('click', resetTheme);
+  elements.settingsLinks?.forEach((link) =>
+    link.addEventListener('click', (event) => handleSettingsNav(event.currentTarget))
+  );
+  elements.exportCustomers?.addEventListener('click', exportCustomers);
 }
 
-function formatDate(date) {
-  if (!date) return "";
-  return new Date(date).toLocaleDateString("vi-VN");
+function handleCustomerSourceChange() {
+  const selected = elements.customerSource.value;
+  document.querySelectorAll('.conditional[data-source]').forEach((field) => {
+    field.classList.toggle('hidden', field.dataset.source !== selected);
+  });
 }
 
-function formatSource(source, detail) {
-  const labels = {
-    store: "Ghé cửa hàng",
-    online: "Online",
-    "referral-new": "Khách cũ giới thiệu",
-    "referral-repeat": "Khách cũ mua lại",
-    staff: "Người quen nhân viên",
-    other: "Khác"
-  };
-  const label = labels[source] || "-";
-  return detail ? `${label} (${detail})` : label;
+function handleCustomerSubmit(event) {
+  event.preventDefault();
+  if (state.user.permissions !== 'admin') return;
+  const formData = new FormData(elements.customerForm);
+  const advisedProducts = Array.from(elements.advisedProducts.querySelectorAll('.chip'))
+    .map((chip) => chip.dataset.value)
+    .join(', ');
+  const record = Object.fromEntries(formData.entries());
+  record.advisedProducts = advisedProducts;
+  record.date = document.getElementById('customerDate').value;
+  showLoading('Đang lưu khách hàng...');
+  ApiClient.createRecord(SHEETS.customers, record)
+    .then(() => loadCustomers())
+    .catch((error) => console.error(error))
+    .finally(() => hideLoading());
+  elements.customerForm.reset();
+  elements.advisedProducts.innerHTML = '';
 }
 
-function formatCareMethod(method) {
-  return {
-    call: "Gọi điện",
-    message: "Nhắn tin",
-    broadcast: "Gửi tin hàng loạt",
-    "call-message": "Gọi + nhắn"
-  }[method] || "-";
+function resetCustomerForm() {
+  elements.advisedProducts.innerHTML = '';
 }
 
-function formatCareRating(rating) {
-  return {
-    potential: "Còn tiềm năng",
-    nurturing: "Đang nuôi",
-    appointment: "Đang hẹn",
-    lost: "Hết tiềm năng"
-  }[rating] || "-";
+function handleAddAdvisedProduct() {
+  const value = elements.advisedProductInput.value.trim();
+  if (!value) return;
+  const chip = document.createElement('span');
+  chip.className = 'chip';
+  chip.dataset.value = value;
+  chip.innerHTML = `${value} <button type="button" aria-label="Xoá">×</button>`;
+  chip.querySelector('button').addEventListener('click', () => chip.remove());
+  elements.advisedProducts.appendChild(chip);
+  elements.advisedProductInput.value = '';
+  elements.advisedProductInput.focus();
 }
 
-function formatShift(shift) {
-  return {
-    morning: "Ca sáng",
-    afternoon: "Ca chiều",
-    full: "Ca full"
-  }[shift] || shift;
+function handleCustomerSearch(event) {
+  const keyword = event.target.value.toLowerCase();
+  elements.customerTableBody.querySelectorAll('tr').forEach((row) => {
+    const text = row.textContent.toLowerCase();
+    row.classList.toggle('hidden', !text.includes(keyword));
+  });
 }
 
-function formatCurrency(value) {
-  return Number(value || 0).toLocaleString("vi-VN") + " ₫";
+function handleCareSubmit(event) {
+  event.preventDefault();
+  if (state.user.permissions !== 'admin') return;
+  const formData = new FormData(elements.careForm);
+  const record = Object.fromEntries(formData.entries());
+  record.date = document.getElementById('careDate').value;
+  showLoading('Đang lưu chăm sóc khách...');
+  ApiClient.createRecord(SHEETS.care, record)
+    .then(() => loadCareRecords())
+    .catch((error) => console.error(error))
+    .finally(() => hideLoading());
+  elements.careForm.reset();
 }
 
-function toggleButtonLoading(button, loading) {
+function handleCareSearch(event) {
+  const keyword = event.target.value.toLowerCase();
+  elements.careTableBody.querySelectorAll('tr').forEach((row) => {
+    const text = row.textContent.toLowerCase();
+    row.classList.toggle('hidden', !text.includes(keyword));
+  });
+}
+
+function handleCareTableClick(event) {
+  const button = event.target.closest('button[data-action="detail"]');
   if (!button) return;
-  button.dataset.loading = loading ? "true" : "false";
+  const row = button.closest('tr');
+  const index = Number(row.dataset.index);
+  const record = state.data.care[index];
+  if (!record) return;
+  const content = `
+    <p><strong>Ngày:</strong> ${record.date || ''}</p>
+    <p><strong>Tên khách:</strong> ${record.name || ''}</p>
+    <p><strong>Số điện thoại:</strong> ${record.phone || ''}</p>
+    <p><strong>Nhân viên:</strong> ${record.staff || ''}</p>
+    <p><strong>Hình thức:</strong> ${record.method || ''}</p>
+    <p><strong>Nội dung:</strong> ${record.content || ''}</p>
+    <p><strong>Phản hồi:</strong> ${record.feedback || ''}</p>
+    <p><strong>Ghi chú:</strong> ${record.note || ''}</p>
+    <p><strong>Đánh giá:</strong> ${record.careRating || ''}</p>
+    ${record.lostReason ? `<p><strong>Lý do hết tiềm năng:</strong> ${record.lostReason}</p>` : ''}
+  `;
+  elements.careDetailContent.innerHTML = content;
+  elements.careDetail.dataset.index = index;
+  elements.careDetail.classList.remove('hidden');
 }
 
-async function downloadBackupFile() {
-  const data = await exportData();
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `klc-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  updateBackupStatus();
+function handleCareRatingChange(event) {
+  const lost = event.target.value === 'lost';
+  elements.lostReason.classList.toggle('hidden', !lost);
+  if (!lost) elements.lostReason.value = '';
 }
 
-async function triggerBackup(mode = "auto") {
-  const data = await exportData();
-  console.info(`Backup ${mode}`, data);
-  updateBackupStatus();
-  if (mode === "manual") {
-    alert("Đã sao lưu dữ liệu nội bộ. Để đồng bộ với Google Drive, vui lòng nhấn \"Sao lưu lên Drive\" hoặc thiết lập Apps Script.");
-  }
+function fillCustomerFromCareDetail() {
+  const index = Number(elements.careDetail.dataset.index);
+  const record = state.data.care[index];
+  if (!record) return;
+  switchPage('customers', 'Khách hàng');
+  elements.customerName.value = record.name || '';
+  elements.customerPhone.value = record.phone || '';
+  elements.customerAddress.value = record.address || '';
+  elements.customerNote.value = `CSKH ${record.date || ''}: ${record.content || ''}`;
+  elements.careDetail.classList.add('hidden');
 }
 
-async function triggerDriveBackup(showAlert = false) {
-  if (!state.config.driveFolder) {
-    alert("Vui lòng nhập ID thư mục Google Drive trong phần Kết nối.");
-    return;
-  }
-  const data = await exportData();
-  try {
-    await uploadToDrive(data);
-    updateBackupStatus();
-    if (showAlert) alert("Đã gửi dữ liệu lên Google Drive.");
-  } catch (error) {
-    console.error(error);
-    alert("Không thể sao lưu lên Google Drive. Kiểm tra Apps Script/Drive API.");
-  }
+function handleSupportSubmit(event) {
+  event.preventDefault();
+  if (state.user.permissions !== 'admin') return;
+  const form = event.target;
+  const category = form.dataset.category;
+  const formData = new FormData(form);
+  const record = Object.fromEntries(formData.entries());
+  showLoading('Đang lưu thông tin hỗ trợ...');
+  const sheet = category === 'warranty' ? SHEETS.warranty : SHEETS.maintenance;
+  ApiClient.createRecord(sheet, record)
+    .then(() => loadWarrantyRecords())
+    .catch((error) => console.error(error))
+    .finally(() => hideLoading());
+  form.reset();
 }
 
-async function uploadToDrive(data) {
-  const endpoint = state.config.driveWebhook;
-  if (!endpoint) throw new Error("Chưa cấu hình webhook Drive");
-  await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      folderId: state.config.driveFolder,
-      payload: data,
-      timestamp: new Date().toISOString()
-    })
+function handleTabSwitch(event, scopeSelector) {
+  const target = event.currentTarget;
+  const container = document.querySelector(scopeSelector);
+  container.querySelectorAll('.tab-link').forEach((tab) => tab.classList.remove('active'));
+  container.querySelectorAll('.tab-content').forEach((panel) => panel.classList.remove('active'));
+  target.classList.add('active');
+  const panel = container.querySelector(`#${target.dataset.tab}`);
+  panel?.classList.add('active');
+}
+
+function filterSupportTables() {
+  const keyword = elements.supportSearch.value.toLowerCase();
+  const status = elements.supportFilter.value;
+  document.querySelectorAll('#warranty table tbody tr').forEach((row) => {
+    const matchesKeyword = row.textContent.toLowerCase().includes(keyword);
+    const currentStatus = row.dataset.status || 'pending';
+    const matchesStatus = status === 'all' || currentStatus === status;
+    row.classList.toggle('hidden', !(matchesKeyword && matchesStatus));
   });
 }
 
-async function exportData() {
-  const collections = ["customers", "care", "support", "checklists", "inventory", "finance", "users"];
-  const result = {};
-  for (const name of collections) {
-    const snapshot = await getDocs(collection(db, name));
-    result[name] = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+function handleSupportStatusChange(event) {
+  const checkbox = event.target;
+  if (!checkbox.matches('input[type="checkbox"]')) return;
+  const action = checkbox.dataset.action;
+  const row = checkbox.closest('tr');
+  const type = row.dataset.type;
+  const id = row.dataset.id;
+  const sheet = type === 'warranty' ? SHEETS.warranty : SHEETS.maintenance;
+  const newStatus = action === 'parts' && checkbox.checked ? 'parts' : checkbox.checked ? 'supported' : 'pending';
+  showLoading('Đang cập nhật trạng thái...');
+  ApiClient.updateRecord(sheet, { id, supportStatus: newStatus })
+    .then(() => loadWarrantyRecords())
+    .catch((error) => console.error(error))
+    .finally(() => hideLoading());
+}
+
+function handleChecklistSubmit(event) {
+  event.preventDefault();
+  if (state.user.permissions !== 'admin') return;
+  const formData = new FormData(elements.checklistForm);
+  const record = Object.fromEntries(formData.entries());
+  const slots = Array.from(elements.scheduleSlots.querySelectorAll('textarea'))
+    .map((area) => `${area.dataset.time}: ${area.value}`)
+    .join('\n');
+  record.tasks = slots;
+  showLoading('Đang lưu checklist...');
+  ApiClient.createRecord(SHEETS.checklist, record)
+    .then(() => loadChecklist())
+    .catch((error) => console.error(error))
+    .finally(() => hideLoading());
+  elements.checklistForm.reset();
+  const defaultShift = elements.checklistShift?.value || 'morning';
+  renderScheduleSlots(defaultShift);
+}
+
+function handleShiftChange(event) {
+  renderScheduleSlots(event.target.value);
+}
+
+function renderScheduleSlots(shift = 'morning') {
+  if (!elements.scheduleSlots) return;
+  const slots = getShiftSlots(shift);
+  elements.scheduleSlots.innerHTML = '';
+  slots.forEach((slot) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'schedule-slot';
+    wrapper.innerHTML = `
+      <label>${slot}</label>
+      <textarea data-time="${slot}" rows="2" placeholder="Công việc"></textarea>`;
+    elements.scheduleSlots.appendChild(wrapper);
+  });
+}
+
+function getShiftSlots(shift) {
+  if (shift === 'morning') {
+    return ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00'];
   }
-  return result;
+  if (shift === 'afternoon') {
+    return ['13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+  }
+  return ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
 }
 
-function updateBackupStatus() {
-  const status = `Lần cuối: ${new Date().toLocaleString("vi-VN")}`;
-  backupStatus.textContent = status;
-  state.config.lastBackup = status;
-  localStorage.setItem("lastBackup", status);
+function handleChecklistSearch(event) {
+  const keyword = event.target.value.toLowerCase();
+  elements.checklistTableBody.querySelectorAll('tr').forEach((row) => {
+    const text = row.textContent.toLowerCase();
+    row.classList.toggle('hidden', !text.includes(keyword));
+  });
 }
 
-function startAutoBackup() {
-  setInterval(() => {
-    if (!state.user || state.user.role !== "admin") return;
-    triggerBackup("auto");
-  }, 15 * 60 * 1000);
+function handleInventorySubmit(event) {
+  event.preventDefault();
+  if (state.user.permissions !== 'admin') return;
+  const form = event.target;
+  const category = form.dataset.category;
+  const formData = new FormData(form);
+  const record = Object.fromEntries(formData.entries());
+  record.type = category === 'import' ? 'Nhập' : 'Xuất';
+  showLoading('Đang cập nhật tồn kho...');
+  Promise.all([
+    ApiClient.createRecord(SHEETS.inventoryLog, record),
+    ApiClient.request('syncInventory', { record, category }),
+  ])
+    .then(() => loadInventory())
+    .catch((error) => console.error(error))
+    .finally(() => hideLoading());
+  form.reset();
 }
 
-async function handleLogoUpload(event) {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const base64 = reader.result;
-    localStorage.setItem("klcLogo", base64);
-    $("#sidebar-logo").src = base64;
+function handleInventorySearch(event) {
+  const keyword = event.target.value.toLowerCase();
+  elements.inventoryTableBody.querySelectorAll('tr').forEach((row) => {
+    const text = row.textContent.toLowerCase();
+    row.classList.toggle('hidden', !text.includes(keyword));
+  });
+  elements.inventoryLogBody.querySelectorAll('tr').forEach((row) => {
+    const text = row.textContent.toLowerCase();
+    row.classList.toggle('hidden', !text.includes(keyword));
+  });
+}
+
+function handleFinanceSubmit(event) {
+  event.preventDefault();
+  if (state.user.permissions !== 'admin') return;
+  const formData = new FormData(elements.financeForm);
+  const record = Object.fromEntries(formData.entries());
+  showLoading('Đang lưu thu/chi...');
+  ApiClient.createRecord(SHEETS.finance, record)
+    .then(() => loadFinance())
+    .catch((error) => console.error(error))
+    .finally(() => hideLoading());
+  elements.financeForm.reset();
+}
+
+function handleFinanceSearch(event) {
+  const keyword = event.target.value.toLowerCase();
+  const table = event.target.id === 'incomeSearch' ? elements.incomeTableBody : elements.expenseTableBody;
+  table.querySelectorAll('tr').forEach((row) => {
+    const text = row.textContent.toLowerCase();
+    row.classList.toggle('hidden', !text.includes(keyword));
+  });
+}
+
+function exportFinanceReport() {
+  const month = elements.financeRange.value || new Date().toISOString().slice(0, 7);
+  const filtered = state.data.finance.filter((item) => item.date?.startsWith(month));
+  const csv = convertToCSV(filtered, ['date', 'type', 'title', 'amount', 'reason']);
+  downloadFile(`bao-cao-thu-chi-${month}.csv`, csv);
+}
+
+function convertToCSV(data, columns) {
+  const header = columns.join(',');
+  const rows = data.map((item) =>
+    columns
+      .map((col) => `"${(item[col] || '').toString().replace(/"/g, '""')}"`)
+      .join(',')
+  );
+  return [header, ...rows].join('\n');
+}
+
+function downloadFile(filename, content) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function handleFeatureToggleSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(elements.featureToggleForm);
+  const features = Object.fromEntries(
+    Array.from(formData.keys()).map((key) => [key, formData.getAll(key).length > 0])
+  );
+  state.settings.features = { ...state.settings.features, ...features };
+  applyFeatureVisibility();
+  localStorage.setItem(STORAGE_KEYS.featureToggle, JSON.stringify(state.settings.features));
+  persistSettings();
+}
+
+function handleCustomerSettingsSubmit(event) {
+  event.preventDefault();
+  const textarea = document.getElementById('customerSourceOptions');
+  const values = textarea.value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  state.settings.sources = values;
+  populateCustomerSources();
+  localStorage.setItem(STORAGE_KEYS.customerSources, JSON.stringify(values));
+  persistSettings();
+}
+
+function handleStaffSettingsSubmit(event) {
+  event.preventDefault();
+  const values = elements.careStaffList.value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  state.settings.staff = values.length ? values : [...STAFF_DEFAULT];
+  localStorage.setItem(STORAGE_KEYS.staffList, JSON.stringify(state.settings.staff));
+  populateStaffSelectors();
+  persistSettings();
+}
+
+function populateStaffSelectors() {
+  const selectors = [elements.careStaff, elements.checklistStaff];
+  selectors.forEach((select) => {
+    if (!select) return;
+    select.innerHTML = '';
+    state.settings.staff.forEach((staff) => {
+      const option = document.createElement('option');
+      option.value = staff;
+      option.textContent = staff;
+      select.appendChild(option);
+    });
+  });
+}
+
+function handleChecklistSettingsSubmit(event) {
+  event.preventDefault();
+  const value = document.getElementById('checklistTemplate').value;
+  state.settings.checklistTemplate = value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  localStorage.setItem(STORAGE_KEYS.checklistTemplate, JSON.stringify(state.settings.checklistTemplate));
+  persistSettings();
+}
+
+function handleInventorySettingsSubmit(event) {
+  event.preventDefault();
+  const threshold = Number(document.getElementById('inventoryThreshold').value || 0);
+  state.settings.inventoryThreshold = threshold;
+  persistSettings();
+}
+
+function handleFinanceSettingsSubmit(event) {
+  event.preventDefault();
+  const categories = document.getElementById('financeCategories').value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  state.settings.financeCategories = categories;
+  localStorage.setItem(STORAGE_KEYS.financeCategories, JSON.stringify(categories));
+  persistSettings();
+}
+
+function handleThemeSubmit(event) {
+  event.preventDefault();
+  const theme = {
+    primary: elements.primaryColor.value,
+    secondary: elements.secondaryColor.value,
+    logoUrl: state.settings.theme.logoUrl,
   };
-  reader.readAsDataURL(file);
-}
-
-function autoLoadLogo() {
-  const logo = localStorage.getItem("klcLogo");
-  if (logo) {
-    $("#sidebar-logo").src = logo;
+  if (elements.logoUpload.files[0]) {
+    const file = elements.logoUpload.files[0];
+    const reader = new FileReader();
+    reader.onload = () => {
+      theme.logoUrl = reader.result;
+      state.settings.theme = theme;
+      applyTheme(theme);
+      saveTheme(theme);
+      persistSettings();
+    };
+    reader.readAsDataURL(file);
+  } else {
+    state.settings.theme = theme;
+    applyTheme(theme);
+    saveTheme(theme);
+    persistSettings();
   }
 }
 
-autoLoadLogo();
-
-function formatCareDetail(record) {
-  return record;
+function resetTheme() {
+  state.settings.theme = {
+    primary: '#00796b',
+    secondary: '#ffb300',
+    logoUrl: 'assets/img/logo.svg',
+  };
+  applyTheme(state.settings.theme);
+  saveTheme(state.settings.theme);
+  persistSettings();
 }
 
-function filterCareByName(name) {
-  return state.collections.care.filter((item) => item.name?.toLowerCase().includes(name.toLowerCase()));
+function persistSettings() {
+  ApiClient.request('saveSettings', { settings: state.settings }).catch((error) =>
+    console.warn('Không thể đồng bộ settings lên Apps Script', error)
+  );
 }
+
+function handleSettingsNav(target) {
+  elements.settingsLinks.forEach((link) => link.classList.remove('active'));
+  elements.settingsPanels.forEach((panel) => panel.classList.remove('active'));
+  target.classList.add('active');
+  const panel = document.getElementById(target.dataset.target);
+  panel?.classList.add('active');
+}
+
+function exportCustomers() {
+  const csv = convertToCSV(state.data.customers, [
+    'date',
+    'name',
+    'phone',
+    'address',
+    'source',
+    'purchaseStatus',
+    'advisedProducts',
+    'note',
+  ]);
+  downloadFile('khach-hang-klc.csv', csv);
+}
+
+function populateRememberedUser() {
+  const remembered = localStorage.getItem(STORAGE_KEYS.rememberedUser);
+  if (!remembered) return;
+  try {
+    const data = JSON.parse(remembered);
+    elements.username.value = data.username || '';
+    elements.password.value = data.password || '';
+    elements.rememberMe.checked = true;
+  } catch (error) {
+    console.warn('Không thể đọc thông tin ghi nhớ đăng nhập', error);
+  }
+}
+
+function initialiseApp() {
+  cacheElements();
+  populateRememberedUser();
+  setupNavigation();
+  setupEventListeners();
+  const defaultShift = elements.checklistShift?.value || 'morning';
+  renderScheduleSlots(defaultShift);
+  loadPersistentSettings();
+  restoreSession();
+}
+
+document.addEventListener('DOMContentLoaded', initialiseApp);
