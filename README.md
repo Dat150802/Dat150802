@@ -1,4 +1,7 @@
+ codex/create-internal-website-for-klc-ben-luc-ju2m25
+
  codex/create-internal-website-for-klc-ben-luc-bain40
+ codex/build-internal-website-for-klc-ben-luc-b5jncf
 # KLC Bến Lức – Hướng dẫn kết nối Google Sheets/Apps Script
 
 Trang nội bộ hiện đã được chuyển sang kiến trúc sử dụng **Google Sheets** làm cơ sở dữ liệu và **Google Apps Script Web App** làm API. Làm theo các bước dưới đây để dữ liệu đồng bộ thời gian thực giữa các thiết bị và luôn có bản sao lưu an toàn.
@@ -173,6 +176,11 @@ function buildResponse(payload, code) {
    - **Who has access:** Anyone.
 5. Nhấn **Triển khai**, chấp thuận các quyền nếu được hỏi và sao chép **URL Web App**.
 
+ codex/create-internal-website-for-klc-ben-luc-ju2m25
+> 💡 Nếu sau khi triển khai bạn vẫn gặp thông báo "Missing or insufficient permissions" khi đăng nhập, hãy mở lại **Triển khai → Quản lý phiên bản**, chọn bản triển khai hiện tại và đảm bảo mục **Ai có quyền truy cập** được đặt thành **Bất kỳ ai**. Đường dẫn phải kết thúc bằng `/exec` (ví dụ `https://script.google.com/macros/s/.../exec`).
+
+
+ codex/build-internal-website-for-klc-ben-luc-b5jncf
 ## 3. Kết nối trang web với Apps Script
 1. Mở trang `index.html` (hoặc bản GitHub Pages của bạn).
 2. Đăng nhập bằng tài khoản quản trị mặc định: `admin / 123456`.
@@ -183,6 +191,11 @@ function buildResponse(payload, code) {
 4. Nhấn **Lưu cấu hình** → trạng thái chuyển sang “Đã kết nối Apps Script”.
 5. Từ bây giờ mọi thao tác thêm mới, cập nhật trạng thái sẽ ghi trực tiếp vào Google Sheets và đồng bộ qua các thiết bị.
 
+ codex/create-internal-website-for-klc-ben-luc-ju2m25
+> ℹ️ Trong trường hợp Web App chưa truy cập được, trang sẽ tự động cho phép đăng nhập bằng hai tài khoản mặc định ở chế độ ngoại tuyến để bạn vào phần Thiết lập hệ thống và cập nhật lại đường dẫn Apps Script.
+
+
+codex/build-internal-website-for-klc-ben-luc-b5jncf
 ## 4. (Tuỳ chọn) Nhận sao lưu vào Google Drive
 Để bật nút "Sao lưu lên Drive", bạn có thể dùng Apps Script riêng với đoạn mã tối giản:
 
@@ -217,6 +230,8 @@ Triển khai web app ở chế độ **Anyone** và dán URL vào ô **Webhook A
 3. Đợi vài phút để GitHub build, sau đó mở `https://dat150802.github.io/Dat150802/` để kiểm tra.
 
 Hoàn tất! Từ giờ trang KLC Bến Lức sẽ chạy trên nền Google, đồng bộ ổn định giữa các tài khoản và luôn có bản sao lưu trên Drive.
+ codex/create-internal-website-for-klc-ben-luc-ju2m25
+
 
  codex/create-internal-website-for-klc-ben-luc-pen74o
 # KLC Bến Lức – Hướng dẫn triển khai nhanh
@@ -298,5 +313,6 @@ Here are some ideas to get you started:
 - 😄 Pronouns: ...
 - ⚡ Fun fact: ...
 -->
+ codex/build-internal-website-for-klc-ben-luc-b5jncf
  codex/build-internal-website-for-klc-ben-luc-b5jncf
  codex/build-internal-website-for-klc-ben-luc-b5jncf

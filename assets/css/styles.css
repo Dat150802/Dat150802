@@ -299,6 +299,41 @@ textarea {
   z-index: 10;
 }
 
+ codex/create-internal-website-for-klc-ben-luc-ju2m25
+.connection-banner {
+  margin: 0 2rem 1rem;
+  padding: 0.85rem 1.2rem;
+  border-radius: 0.8rem;
+  border: 1px solid transparent;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  background: rgba(15, 111, 120, 0.08);
+  color: var(--color-primary);
+}
+
+.connection-banner.warning {
+  background: #fff4e5;
+  border-<<<<
+
+fd8a8;
+  color: #a15c07;color: #ffd8a8;
+  color: #a15c07;
+}
+
+.connection-banner.error {
+  background: #fdeaea;
+  border-color: #f5b5b5;
+  color: #a72222;
+}
+
+.connection-banner.success {
+  background: #e8f5f0;
+  border-color: #a1dec7;
+  color: #0f6f78;
+}
+
+
+ codex/build-internal-website-for-klc-ben-luc-b5jncf
 .menu-toggle {
   display: none;
   background: transparent;

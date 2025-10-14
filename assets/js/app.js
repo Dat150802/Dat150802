@@ -1,6 +1,6 @@
 // ---------- Helpers ----------
 const $ = (selector, parent = document) => parent.querySelector(selector);
-const $$ = (selector, parent = document) => parent.querySelectorAll(selector);
+const $$ = (selector, parent = document) => Array.from(parent.querySelectorAll(selector));
 
 // ---------- Google Apps Script API (tùy chọn) ----------
 const api = {
@@ -109,7 +109,7 @@ const loginScreen = $("#login-screen");
 const appShell = $("#app-shell");
 const pageTitle = $("#page-title");
 const menuButtons = $$(".menu-item");
-const pages = Array.from($$(".page"));
+const pages = $$(".page");
 const settingsLinks = $$(".settings-link");
 const settingsPanels = $$(".settings-panel");
 const sidebar = $(".sidebar");
@@ -192,6 +192,7 @@ const dashboards = {
   activityFeed: $("#activity-feed"),
   dashboardPeriod: $("#dashboard-period")
 };
+
 const activityTemplate = $("#activity-template")?.content?.firstElementChild;
 const careDetail = $("#care-detail");
 const careUpdateCustomer = $("#care-update-customer");
@@ -218,6 +219,9 @@ async function init() {
   autoLoadLogo();
 
   setupEventListeners();
+  updatePurchaseVisibility();
+  updateCareLostVisibility();
+  updateSupportForm();
 
   await seedDefaultUsers();      // tạo user mặc định nếu chưa có
   autoLogin();                   // tự vào nếu có session
@@ -399,8 +403,8 @@ function setupAfterLogin() {
   sidebar?.classList.remove("open");
   switchPage("dashboard");
   renderShiftTasks(inputs.checklistShift?.value || "morning");
-  subscribeCollections();     // realtime từ Firestore
-  startSync();                // pull định kỳ từ GAS nếu có
+  subscribeCollections();      // realtime từ Firestore
+  startSync();                 // pull định kỳ từ GAS nếu có
   applyPermissions();
 }
 
@@ -486,24 +490,25 @@ function handleSourceChange() {
     inputs.customerSourceDetail.value = "";
   }
 }
+
 function updatePurchaseVisibility() {
   const purchased = inputs.customerStatusPurchased?.checked;
   inputs.purchaseDetails?.classList.toggle("hidden", !purchased);
   inputs.consultDetails?.classList.toggle("hidden", !!purchased);
 }
 function updateCareLostVisibility() {
-  const lost = Array.from(inputs.careRatingRadios || []).find((r) => r.checked)?.value === "lost";
+  const lost = (inputs.careRatingRadios || []).find((r) => r.checked)?.value === "lost";
   inputs.careLostReason?.classList.toggle("hidden", !lost);
 }
 function updateSupportForm() {
-  const value = Array.from(inputs.supportType || []).find((r) => r.checked)?.value;
+  const value = (inputs.supportType || []).find((r) => r.checked)?.value;
   inputs.supportStatusRow?.classList.toggle("hidden", value === "maintenance");
 }
 function renderShiftTasks(shift = "morning") {
   const slots = {
-    morning: ["08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00"],
-    afternoon:["13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00"],
-    full:["08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00"]
+    morning: ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00"],
+    afternoon: ["13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"],
+    full: ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"]
   };
   if (!inputs.checklistTasks) return;
   inputs.checklistTasks.innerHTML = "";
@@ -560,7 +565,7 @@ async function handleCareSubmit(e) {
 
 async function handleSupportSubmit(e) {
   e.preventDefault();
-  const type = Array.from(inputs.supportType || []).find((r) => r.checked)?.value;
+  const type = (inputs.supportType || []).find((r) => r.checked)?.value;
   const data = collectFormData(forms.support);
   data.type = type;
   data.supported = false;
@@ -704,16 +709,19 @@ async function saveAppearance(e) {
   applyTheme();
   alert("Đã cập nhật giao diện");
 }
+
 function resetAppearance() {
   if (!inputs.themeColor || !inputs.accentColor) return;
   inputs.themeColor.value = "#0f6f78";
   inputs.accentColor.value = "#f3b63f";
   saveAppearance(new Event("submit"));
 }
+
 function applyTheme() {
   document.documentElement.style.setProperty("--color-primary", state.config.themeColor || "#0f6f78");
   document.documentElement.style.setProperty("--color-accent", state.config.accentColor || "#f3b63f");
 }
+
 function setScriptStatus(text, status = "neutral") {
   if (!scriptStatus) return;
   scriptStatus.textContent = text;
@@ -721,6 +729,28 @@ function setScriptStatus(text, status = "neutral") {
   if (status === "success") scriptStatus.classList.add("success");
   else if (status === "error") scriptStatus.classList.add("error");
 }
+
+function collectFormData(form) {
+    const formData = new FormData(form);
+    const data = {};
+    formData.forEach((value, key) => {
+        data[key.replace(/-/g, "")] = typeof value === "string" ? value.trim() : value;
+    });
+    return data;
+}
+
+async function submitWithLoader(fn) {
+    loader.show();
+    try {
+        await fn();
+    } catch (error) {
+        console.error(error);
+        alert("Không thể lưu dữ liệu. Vui lòng kiểm tra kết nối và thử lại.");
+    } finally {
+        loader.hide();
+    }
+}
+
 
 // ---------- Sync ----------
 async function refreshAllData(showLoader = false) {
@@ -741,6 +771,8 @@ async function refreshAllData(showLoader = false) {
       api.list("users")
     ]);
 
+    // Note: This part will overwrite local state from Firestore with data from GAS.
+    // This is fine if GAS is considered the "source of truth" during a manual sync.
     state.collections.customers = customers || [];
     state.collections.care = care || [];
     const supportList = support || [];
@@ -775,6 +807,7 @@ async function startSync() {
     state.syncTimer = setInterval(() => refreshAllData(false), 15000);
   }
 }
+
 function stopSync() {
   if (state.syncTimer) {
     clearInterval(state.syncTimer);
@@ -1097,6 +1130,7 @@ function renderCustomersChart() {
   const data = Object.values(grouped);
 
   if (state.charts.customers) state.charts.customers.destroy();
+
   state.charts.customers = new Chart(ctx, {
     type: "line",
     data: {
